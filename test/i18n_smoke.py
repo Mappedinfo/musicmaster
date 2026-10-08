@@ -38,6 +38,20 @@ with sync_playwright() as p:
         }""")
         check("英文模式 " + tab + " 无中文", len(cn) == 0, "; ".join(cn[:3]))
 
+        # 键名泄漏：界面出现 exp.li1 这类原始键名说明字典缺键（"无中文"检查抓不到）
+        leaked = pg.evaluate("""() => {
+          const panel = document.querySelector('.tab-panel.active');
+          const walk = document.createTreeWalker(panel, NodeFilter.SHOW_TEXT);
+          const out = []; let n;
+          while ((n = walk.nextNode())) {
+            const t = n.textContent.trim();
+            if (t && /^[a-z][a-zA-Z0-9]*\.[a-zA-Z0-9.]+$/.test(t)) out.push(t);
+          }
+          return out;
+        }""")
+        check("英文模式 " + tab + " 无键名泄漏", not leaked, "; ".join(leaked[:3]))
+
+
     # 课程英文内容真的渲染了
     pg.click('.tab[data-tab="learn"]')
     pg.wait_for_timeout(300)

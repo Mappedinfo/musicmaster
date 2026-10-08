@@ -9,7 +9,7 @@ import {
   TARGET_SR, parseLRC, activeLyricIndex, KaraokeScorer,
   decodeMono, extractReference, KaraokePlayer,
 } from './karaoke.js';
-import { t, L, initI18n, setLang, getLang, onLangChange, applyI18n } from './i18n.js';
+import { t, L, initI18n, setLang, getLang, onLangChange, applyI18n, DICT } from './i18n.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -54,6 +54,8 @@ function initLang() {
     sel.addEventListener('change', () => setLang(sel.value));
   }
   document.title = t('app.title');
+  const meta = $('#metaDescription');
+  if (meta) meta.setAttribute('content', t('app.description'));
   // 语言变化后，动态渲染的内容需要重建
   onLangChange(() => {
     if (state.karaoke.report) renderKaraokeReport(state.karaoke.report);
@@ -63,6 +65,18 @@ function initLang() {
     renderHistory();
     setKaraokePlayLabel(state.karaoke.player ? state.karaoke.player.playing : false);
   });
+}
+
+/**
+ * 供 Canvas 内联文案使用。
+ * 注意：不能在这些函数里直接调 t()——drawKaraoke 等函数有局部变量 const t = k.time，
+ * 会遮蔽 i18n 的 t，报 "t is not a function"。所以走一个不同名的查表函数。
+ */
+function canvasText(key) {
+  const e = DICT[key];
+  if (!e) return key;
+  const lang = getLang();
+  return e[lang] != null ? e[lang] : e.zh;
 }
 
 // ---------- 音名显示（八度基准可校准） ----------
@@ -1117,7 +1131,7 @@ function drawKaraoke() {
     ctx.fillStyle = 'rgba(154,163,181,.75)';
     ctx.font = '14px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('选择歌曲后，这里会出现原唱旋律线和你的音高轨迹', W / 2, H / 2);
+    ctx.fillText(canvasText('k.canvasEmpty'), W / 2, H / 2);
   }
 }
 

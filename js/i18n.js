@@ -17,7 +17,6 @@ export const DICT = {
   'mic.requesting': { zh: '正在请求权限…', en: 'Requesting permission…' },
   'mic.listening': { zh: '正在监听 · 对着麦克风哼 "wu——" 试试', en: 'Listening · try humming "woo—" into the mic' },
   'mic.privacy': { zh: '所有分析都在你的浏览器本地完成，录音不会上传', en: 'Everything is analyzed locally in your browser; recordings are never uploaded' },
-  'lang.label': { zh: '语言', en: 'Language' },
 
   // ---------- 选项卡 ----------
   'tab.tuner': { zh: '🎙️ 音准仪', en: '🎙️ Tuner' },
@@ -27,7 +26,6 @@ export const DICT = {
   'tab.learn': { zh: '📖 入门课程', en: '📖 Lessons' },
 
   // ---------- 音准仪 ----------
-  'tuner.centsLabel': { zh: ' cents', en: ' cents' },
   'tuner.clarityHint': { zh: '清晰度越高，音高检测越可靠。轻声哼 "wu——" 通常最稳定。', en: 'Higher clarity means more reliable pitch detection. A soft "woo—" hum is usually the steadiest.' },
   'tuner.clarityTitle': { zh: '信号清晰度（泛音周期性强度）', en: 'Signal clarity (strength of harmonic periodicity)' },
   'tuner.curveTitle': { zh: '音高曲线', en: 'Pitch curve' },
@@ -81,12 +79,8 @@ export const DICT = {
   'metric.hnr': { zh: '谐波占比', en: 'Harmonic ratio' },
   'metric.hnrDesc': { zh: '周期性谐波能量比例；气声多会变低', en: 'Proportion of periodic harmonic energy; drops with breathiness' },
   'exp.title': { zh: '🔬 小实验：感受胸声与头声', en: '🔬 Try this: feel chest voice and head voice' },
-  'exp.li1a': { zh: '用平时说话的感觉唱一个低音（比如 C3–G3 附近的 "wu"），这是偏', en: 'Sing a low note the way you speak (say "woo" around C3–G3). This is towards ' },
-  'exp.li1b': { zh: '胸声', en: 'chest voice' },
-  'exp.li1c': { zh: '的发声：观察低/高频能量比通常较高、质心较低。', en: ': the low/high energy ratio is usually higher and the centroid lower.' },
-  'exp.li2a': { zh: '再用轻飘飘、像吹口哨的感觉唱高八度，这是偏', en: 'Then sing an octave up, light and whistle-like. This is towards ' },
-  'exp.li2b': { zh: '头声', en: 'head voice' },
-  'exp.li2c': { zh: '的发声：能量比通常会下降、谐波占比可能更纯净。', en: ': the energy ratio usually drops and the harmonics may sound purer.' },
+  'exp.li1': { zh: "<span>用平时说话的感觉唱一个低音（比如 C3–G3 附近的 \"wu\"），这是偏<strong>胸声</strong>的发声：观察低/高频能量比通常较高、质心较低。</span>", en: "<span>Sing a low note the way you speak (say \"woo\" around C3–G3). This is towards <strong>chest voice</strong>: the low/high energy ratio is usually higher and the centroid lower.</span>" },
+  'exp.li2': { zh: "<span>再用轻飘飘、像吹口哨的感觉唱高八度，这是偏<strong>头声</strong>的发声：能量比通常会下降、谐波占比可能更纯净。</span>", en: "<span>Then sing an octave up, light and whistle-like. This is towards <strong>head voice</strong>: the energy ratio usually drops and the harmonics may sound purer.</span>" },
   'exp.li3': { zh: '最后尝试在两者之间平滑滑动（滑音），找到不"破音"的过渡——这就是混声要训练的东西。', en: 'Finally glide smoothly between them to find the transition where your voice does not crack — that is exactly what mixing trains.' },
   'exp.note': { zh: '说明：胸声/头声在声学上没有单一的判定指标，这里的数值是帮助你建立直觉的近似参考，不是医学或声乐诊断。', en: 'Note: there is no single acoustic measure that decides chest versus head voice. These numbers are approximate guides to build intuition, not a medical or vocal diagnosis.' },
 
@@ -196,9 +190,6 @@ export const DICT = {
   "k.lrcLoaded": { zh: "已载入 {n} 行歌词；{name}。", en: "Loaded {n} lyric lines; {name}." },
   "k.historyPrefix": { zh: "K歌：", en: "Sing-along: " },
   // ---------- 课程 ----------
-  'learn.title': { zh: '入门课程', en: 'Beginner lessons' },
-  'learn.toast': { zh: '登录后欢迎语', en: 'welcome' },
-  'gauge.good': { zh: '唱准', en: 'in tune' },
 };
 
 let currentLang = 'zh';
