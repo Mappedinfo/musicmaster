@@ -25,12 +25,16 @@ export class AudioEngine {
   get running() { return this._running; }
   get sampleRate() { return this.ctx ? this.ctx.sampleRate : 44100; }
 
-  async start() {
+  /**
+   * 打开麦克风并开始分析。
+   * @param {{echoCancellation?: boolean}} opts 外放唱歌时可开启回声消除，避免把伴奏当成自己的声音
+   */
+  async start(opts = {}) {
     if (this._running) return;
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: {
-        echoCancellation: false,
-        noiseSuppression: false,
+        echoCancellation: !!opts.echoCancellation,
+        noiseSuppression: !!opts.echoCancellation,
         autoGainControl: false,
         channelCount: 1,
       },

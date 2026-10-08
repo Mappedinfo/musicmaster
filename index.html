@@ -30,6 +30,7 @@
 <nav class="tabs" role="tablist">
   <button class="tab active" data-tab="tuner" role="tab">🎙️ 音准仪</button>
   <button class="tab" data-tab="practice" role="tab">🎵 跟唱练习</button>
+  <button class="tab" data-tab="karaoke" role="tab">🎤 K歌跟唱</button>
   <button class="tab" data-tab="spectrum" role="tab">🌈 共鸣与频谱</button>
   <button class="tab" data-tab="learn" role="tab">📖 入门课程</button>
 </nav>
@@ -53,6 +54,23 @@
           <div class="clarity-fill" id="clarityFill"></div>
         </div>
         <p class="card-caption">清晰度越高，音高检测越可靠。轻声哼 "wu——" 通常最稳定。</p>
+        <label class="octave-setting">音名八度基准
+          <select id="octaveBase">
+            <option value="0">C4 = 中央 C（GarageBand / Logic / 科学音高记号）</option>
+            <option value="1">C3 = 中央 C（Cubase / MuseScore / 部分硬件）</option>
+          </select>
+        </label>
+        <p class="card-caption">同一个音在不同软件里八度编号可能差一位。选和你的琴/软件一致的那项，界面上所有音名都会跟着变；音高检测本身不受影响。</p>
+        <details class="octave-help">
+          <summary>怎么确认？看 Hz 数字最可靠</summary>
+          <p>音名可以有两套叫法，频率不会骗人：</p>
+          <ul>
+            <li><b>约 131 Hz</b> → 男声常用的低音 C（GarageBand 里叫 C3，Cubase 里叫 C2）</li>
+            <li><b>约 262 Hz</b> → 中央 C，也就是钢琴正中间那个 C（GarageBand 里叫 C4，Cubase 里叫 C3）</li>
+            <li><b>约 440 Hz</b> → 标准音 A</li>
+          </ul>
+          <p>用你的琴弹一个音，看这里显示的 Hz 是否和上面一致。若你的软件把中央 C 写作 C3，就选第二项，两边就对齐了。</p>
+        </details>
       </div>
       <div class="card curve-card">
         <h3>音高曲线</h3>
@@ -104,6 +122,75 @@
     <div class="card history-card">
       <h3>📈 练习记录</h3>
       <div id="historyList" class="history-list"><p class="muted">还没有练习记录，完成一次跟唱练习后会自动保存在本机。</p></div>
+    </div>
+  </section>
+
+  <!-- ============ K歌跟唱 ============ -->
+  <section id="tab-karaoke" class="tab-panel">
+    <div class="card karaoke-head">
+      <h3>🎤 K歌跟唱：用你自己的歌练</h3>
+      <p class="muted">选一首歌（BGM 或原唱），浏览器会在本地分析出它的旋律线，然后你跟着唱，工具实时对比你和原唱的每个音，唱完给出逐句指导。<strong>音频只在你的浏览器内存里，不会上传，也不会保存在本机。</strong></p>
+      <div id="karaokeLoading" class="karaoke-loading" hidden>
+        <div class="progress-bar"><div class="progress-fill" id="karaokeProgressFill"></div></div>
+        <p class="muted" id="karaokeProgressText">准备中…</p>
+      </div>
+      <div class="k-controls">
+        <button class="btn btn-ghost" id="karaokePlayBtn">▶ 开始跟唱</button>
+        <button class="btn btn-ghost" id="karaokeRestartBtn">↺ 重唱</button>
+        <label class="k-volume">伴奏音量 <input type="range" id="karaokeVol" min="0" max="100" value="90"></label>
+        <label class="k-check"><input type="checkbox" id="karaokeEcho"> 外放模式（回声消除，建议戴耳机时关闭）</label>
+      </div>
+      <p class="karaoke-hint" id="karaokeHint">先点右上角「启用麦克风」，再点「开始跟唱」。戴耳机练习效果最好。</p>
+    </div>
+
+    <div class="karaoke-grid">
+      <div class="card k-timeline-card">
+        <div class="k-timeline-head">
+          <div class="k-now">
+            <span class="k-now-label" id="karaokeTime">0:00 / 0:00</span>
+            <span class="k-now-note" id="karaokeNowNote">--</span>
+          </div>
+          <div class="k-live-score">
+            <span id="karaokeLiveScore">--</span><small> 分</small>
+            <span class="k-live-sub" id="karaokeLiveCents"></span>
+          </div>
+        </div>
+        <canvas id="karaokeCanvas" width="820" height="330"></canvas>
+        <p class="card-caption">灰色线是参考音高，彩色点是你唱的音；点在线上方表示唱高、下方表示唱低。绿=准，黄=接近，红=偏。</p>
+      </div>
+
+      <div class="card k-status-card">
+        <h3>实时状态</h3>
+        <div class="k-status">
+          <div><span>参考音</span><b id="karaokeRef">--</b></div>
+          <div><span>你的音</span><b id="karaokeMine">--</b></div>
+          <div><span>音分差</span><b id="karaokeCents">--</b></div>
+          <div><span>麦克风</span><b id="karaokeLevel">--</b></div>
+        </div>
+        <div class="k-lyric" id="karaokeLyric">（上传 .lrc 歌词后，会在这里逐句显示）</div>
+        <label class="file-btn" for="lrcFile">＋ 上传歌词 .lrc（可选，用于逐句评分）</label>
+        <input type="file" id="lrcFile" accept=".lrc,.txt,text/plain" hidden>
+      </div>
+
+      <div class="card k-pick-card">
+        <h3>选择歌曲</h3>
+        <label class="file-btn big" for="songFile">🎵 选择本地音频文件</label>
+        <input type="file" id="songFile" accept="audio/*" hidden>
+        <p class="muted" id="karaokeFileInfo">支持 mp3 / m4a / wav / flac。文件不会离开你的设备。</p>
+        <p class="muted">用「带人声的歌曲」效果最好，因为工具要听出原唱的旋律；纯伴奏因为没有清晰主旋律，分析结果可能不准。</p>
+      </div>
+
+      <div class="card k-report-card" id="karaokeReport" hidden></div>
+      <div class="card k-guide-card">
+        <h3>怎么练才有效</h3>
+        <ol class="exp-list">
+          <li>戴耳机：手机上外放的话，工具会把伴奏也当成你的声音，评分就失真了。</li>
+          <li>第一遍别用力，先轻声跟一遍，让工具判断"偏高"还是"偏低"。</li>
+          <li>第二遍只练报告里点出的最难那一句，循环十次，再连起来唱。</li>
+          <li>拿到 80 分以上，把这首歌放到「共鸣与频谱」里看胸声/头声倾向，检验高音是不是硬挤出来的。</li>
+        </ol>
+        <p class="muted">说明：本工具的参考旋律是从你的音频里自动提取的，可能受伴奏影响；评分和指导是练习参考，不是声乐或医学诊断。</p>
+      </div>
     </div>
   </section>
 

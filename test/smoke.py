@@ -28,7 +28,7 @@ with sync_playwright() as p:
         if not cond: ok = False
 
     check("title", "MusicMaster" in page.title(), page.title())
-    check("tabs", page.locator(".tab").count() == 4, str(page.locator(".tab").count()))
+    check("tabs", page.locator(".tab").count() == 5, str(page.locator(".tab").count()))
     check("exercise cards", page.locator(".exercise-card").count() == 5, str(page.locator(".exercise-card").count()))
     check("key options", page.locator("#keySelect option").count() == 7)
     check("learn content rendered", len(page.locator("#learnContent .lesson").all()) >= 4)
