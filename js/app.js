@@ -10,6 +10,7 @@ import {
   decodeMono, extractReference, KaraokePlayer,
 } from './karaoke.js';
 import { t, L, initI18n, setLang, getLang, onLangChange, applyI18n, DICT } from './i18n.js';
+import { buildReferenceFromPair } from './karaoke.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -42,6 +43,8 @@ const state = {
     songName: '',
     live: null,
     fileReady: false,
+    accFile: null,        // 可选的伴奏文件（精准模式）
+    pairUsed: false,
   },
 };
 
@@ -790,6 +793,21 @@ function initKaraoke() {
     lrcInput.value = '';
   });
 
+  const accInput = $('#accFile');
+  if (accInput) {
+    accInput.addEventListener('change', async () => {
+      const f = accInput.files && accInput.files[0];
+      if (f) {
+        k.accFile = f;
+        const el = $('#karaokePairInfo');
+        if (el) { el.textContent = t('k.pairSel', { name: f.name }); el.className = 'muted k-pair-status warn'; }
+        // 已经有主文件时，立刻重新按精准模式分析
+        if (k.songFile) await loadKaraokeFile(k.songFile);
+      }
+      accInput.value = '';
+    });
+  }
+
   $('#karaokePlayBtn').addEventListener('click', async () => {
     if (!k.fileReady) { toast(t('k.toastNeedSong')); return; }
     if (!state.micOn) { toast(t('k.toastNeedMic')); return; }
@@ -828,6 +846,7 @@ function setKaraokePlayLabel(playing) {
 
 async function loadKaraokeFile(file) {
   const k = KARAOKE;
+  k.songFile = file;
   const prog = $('#karaokeProgressFill');
   const info = $('#karaokeFileInfo');
   const loading = $('#karaokeLoading');
@@ -838,14 +857,38 @@ async function loadKaraokeFile(file) {
   };
   try {
     loading.hidden = false;
-    show(0.02, t('k.decode', { name: file.name }));
-    await new Promise((r) => setTimeout(r, 40));
-    const pcm = await decodeMono(file, TARGET_SR);
-    show(0.2, t('k.decoded', { sec: (pcm.length / TARGET_SR).toFixed(0) }));
-    await new Promise((r) => setTimeout(r, 40));
-    const res = await extractReference(pcm, TARGET_SR, (p) => {
-      show(0.2 + 0.78 * p, t('k.extracting', { p: Math.round(p * 100) }));
-    });
+    let res;
+    k.pairUsed = false;
+    if (k.accFile) {
+      // 精准模式：原唱 + 伴奏 -> 对齐 + 相减 -> 干净人声 -> 旋律
+      show(0.02, t('k.pairWorking', { name: k.accFile.name }));
+      await new Promise((r) => setTimeout(r, 40));
+      const pair = await buildReferenceFromPair(file, k.accFile, { sampleRate: TARGET_SR });
+      res = pair.melody;
+      k.pairUsed = true;
+      k.vocalBlob = pair.vocalBlob;
+      const ms = Math.round(pair.delaySec * 1000);
+      const snr = pair.quality.snrProxyDb.toFixed(1);
+      const cov = Math.round((pair.melody.coverage || 0) * 100);
+      const pairEl = $('#karaokePairInfo');
+      if (pairEl) {
+        pairEl.textContent = t('k.pairOk', { ms: ms, g: pair.gain.toFixed(2), snr: snr, cov: cov });
+        pairEl.className = 'muted k-pair-status ok';
+      }
+      if (pair.quality.snrProxyDb < 3) {
+        toast(t('k.pairPoor'), 7000);
+      }
+      show(0.85, t('k.decoded', { sec: (res.frames ? res.frames.length * (res.hopSec || 0.005) : 0).toFixed(0) }));
+    } else {
+      show(0.02, t('k.decode', { name: file.name }));
+      await new Promise((r) => setTimeout(r, 40));
+      const pcm = await decodeMono(file, TARGET_SR);
+      show(0.2, t('k.decoded', { sec: (pcm.length / TARGET_SR).toFixed(0) }));
+      await new Promise((r) => setTimeout(r, 40));
+      res = await extractReference(pcm, TARGET_SR, (p) => {
+        show(0.2 + 0.78 * p, t('k.extracting', { p: Math.round(p * 100) }));
+      });
+    }
 
     const voiced = res.midis.reduce((n, v) => n + (v != null ? 1 : 0), 0);
     if (voiced < 20) {
@@ -857,8 +900,9 @@ async function loadKaraokeFile(file) {
     k.songName = file.name;
     k.scorer = null;
     const dur = k.player.duration || (res.times.length ? res.times[res.times.length - 1] : 0);
-    await k.player.load(file);
-    info.textContent = t('k.ready', { name: file.name, dur: formatTime(dur), sec: (voiced * res.hopSec).toFixed(0) });
+    // 精准模式下播放伴奏（让你跟着伴奏唱），单文件模式播放该文件本身
+    await k.player.load(k.pairUsed && k.accFile ? k.accFile : file);
+    info.textContent = t('k.ready', { name: file.name, dur: formatTime(dur), sec: (voiced * res.hopSec).toFixed(0) }) + (k.pairUsed ? ' ' + t('k.pairTag') : '');
 
     show(1, t('k.donePct'));
     setTimeout(() => { loading.hidden = true; }, 500);
@@ -866,6 +910,11 @@ async function loadKaraokeFile(file) {
   } catch (err) {
     console.error(err);
     loading.hidden = true;
+    if (KARAOKE.accFile) {
+      const pe = $('#karaokePairInfo');
+      if (pe) { pe.textContent = t('k.pairFail', { msg: (err && err.message) ? err.message : 'error' }); pe.className = 'muted k-pair-status warn'; }
+      KARAOKE.accFile = null;
+    }
     info.textContent = t('k.loadFail', { msg: (err && err.message) ? err.message : 'unknown' });
     toast(t('k.loadFailToast', { msg: (err && err.message) ? err.message : 'unknown' }), 6000);
   }
@@ -1004,7 +1053,14 @@ function drawKaraoke() {
 
   // 自适应音高范围
   let lo = 60, hi = 72;
-  if (ref && ref.midis.length) {
+  // 用可见范围内的音符段算音域：比逐帧更稳，不会被单帧八度错误拉满整个纵轴
+  const visNotes = (ref && ref.notes) ? ref.notes.filter((x) => x.t1 >= t0 - 0.5 && x.t0 <= t1 + 0.5) : null;
+  if (visNotes && visNotes.length) {
+    const ms = visNotes.map((x) => x.midi).sort((a, b) => a - b);
+    lo = ms[Math.floor(ms.length * 0.05)];
+    hi = ms[Math.min(ms.length - 1, Math.ceil(ms.length * 0.95))];
+    if (hi - lo < 5) { const mid = (lo + hi) / 2; lo = mid - 3; hi = mid + 3; }
+  } else if (ref && ref.midis && ref.midis.length) {
     for (let i = 0; i < ref.times.length; i++) {
       const tm = ref.times[i];
       if (tm < t0 - 1 || tm > t1 + 1) continue;
@@ -1056,7 +1112,23 @@ function drawKaraoke() {
   }
 
   // 参考旋律线
-  if (ref && ref.times.length) {
+  if (ref && ref.notes && ref.notes.length) {
+    // 按音符段画水平线段：跳变处不再斜连成乱线，断音处也不会被连起来
+    ctx.strokeStyle = 'rgba(154,163,181,.9)';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    for (const nt of ref.notes) {
+      if (nt.t1 < t0 - 0.2 || nt.t0 > t1) continue;
+      const xa = xOf(Math.max(nt.t0, t0 - 0.2));
+      const xb = xOf(Math.min(nt.t1, t1 + 0.2));
+      if (xb - xa < 1.5) continue;
+      const y = yOf(nt.midi);
+      ctx.beginPath();
+      ctx.moveTo(xa, y);
+      ctx.lineTo(xb, y);
+      ctx.stroke();
+    }
+  } else if (ref && ref.times && ref.times.length) {
     ctx.strokeStyle = 'rgba(154,163,181,.85)';
     ctx.lineWidth = 2;
     ctx.beginPath();

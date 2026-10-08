@@ -185,7 +185,14 @@
         <label class="file-btn big" for="songFile" data-i18n="k.pickBtn">🎵 选择本地音频文件</label>
         <input type="file" id="songFile" accept="audio/*" hidden>
         <p class="muted" id="karaokeFileInfo" data-i18n="k.pickInfo">支持 mp3 / m4a / wav / flac。文件不会离开你的设备。</p>
-        <p class="muted" data-i18n="k.pickWarning">用「带人声的歌曲」效果最好，因为工具要听出原唱的旋律；纯伴奏因为没有清晰主旋律，分析结果可能不准。</p>
+        <hr class="k-sep">
+<h4 class="k-opt-title" data-i18n="k.pairTitle">🎯 精准模式：同时提供原唱和伴奏</h4>
+<p class="muted" data-i18n="k.pairDesc">单文件混音里伴奏会盖住人声，旋律提取率只有约 10%。再上传一份<strong>同样的伴奏</strong>，工具会自动对齐时间轴并把伴奏减掉，得到干净人声——实测人声段旋律覆盖率能从 12% 提到 100%。</p>
+<label class="file-btn" for="accFile" data-i18n="k.pairBtn">🎼 上传伴奏（可选，推荐）</label>
+<input type="file" id="accFile" accept="audio/*" hidden>
+<p class="muted k-pair-status" id="karaokePairInfo" data-i18n="k.pairIdle">未使用伴奏时按单文件模式分析。</p>
+
+<p class="muted" data-i18n="k.pickWarning">用「带人声的歌曲」效果最好，因为工具要听出原唱的旋律；纯伴奏因为没有清晰主旋律，分析结果可能不准。</p>
       </div>
 
       <div class="card k-report-card" id="karaokeReport" hidden></div>

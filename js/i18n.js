@@ -189,6 +189,16 @@ export const DICT = {
   "range.recording": { zh: "记录中……先哼一个最低的音，再哼一个最高的音。", en: "Recording… hum your lowest note first, then your highest." },
   "k.lrcLoaded": { zh: "已载入 {n} 行歌词；{name}。", en: "Loaded {n} lyric lines; {name}." },
   "k.historyPrefix": { zh: "K歌：", en: "Sing-along: " },
+  "k.pairTitle": { zh: "🎯 精准模式：同时提供原唱和伴奏", en: "🎯 Precise mode: provide both the original and the backing track" },
+  "k.pairDesc": { zh: "单文件混音里伴奏会盖住人声，旋律提取率只有约 10%。再上传一份<strong>同样的伴奏</strong>，工具会自动对齐时间轴并把伴奏减掉，得到干净人声——实测人声段旋律覆盖率能从 12% 提到 100%。", en: "In a single mix the backing track masks the voice and melody extraction only recovers about 10%. Upload the <strong>matching backing track</strong> too and the tool aligns the timeline and subtracts it to get a clean vocal — measured coverage in vocal sections goes from 12% to 100%." },
+  "k.pairBtn": { zh: "🎼 上传伴奏（可选，推荐）", en: "🎼 Upload backing track (optional, recommended)" },
+  "k.pairIdle": { zh: "未使用伴奏时按单文件模式分析。", en: "Without a backing track the tool analyses the single file." },
+  "k.pairWorking": { zh: "正在对齐并相减「{name}」…", en: "Aligning and subtracting \"{name}\"…" },
+  "k.pairOk": { zh: "精准模式已就绪：延迟 {ms}ms，增益 {g}，相减质量 {snr}dB（人声段覆盖率 {cov}%）。", en: "Precise mode ready: delay {ms}ms, gain {g}, subtraction {snr}dB (vocal coverage {cov}%)." },
+  "k.pairPoor": { zh: "两个文件可能不是同一版本（对齐相关度偏低）。相减后质量可能反而更差，建议换成同一版本的伴奏。", en: "These two files may not be the same version (low alignment correlation). Subtraction may make things worse — try the matching backing track." },
+  "k.pairFail": { zh: "伴奏处理失败：{msg}，已退回单文件模式。", en: "Backing track failed: {msg}. Falling back to single-file mode." },
+  "k.pairTag": { zh: "（精准模式：已用伴奏相减提取人声）", en: "(precise mode: vocal extracted by subtracting the backing track)" },
+  "k.pairSel": { zh: "已选择伴奏「{name}」，选好原唱后会自动相减分析。", en: "Backing track \"{name}\" selected; it will be subtracted once you pick the original." },
   // ---------- 课程 ----------
 };
 

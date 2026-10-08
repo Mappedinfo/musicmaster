@@ -560,3 +560,11 @@ button, label, select, input { -webkit-tap-highlight-color: transparent; }
   .header-tools { justify-content: flex-start; }
   .lang-picker select { font-size: 16px; padding: 9px 14px; }
 }
+
+/* ---------- K歌：双文件（原唱+伴奏）---------- */
+.k-sep { border: none; border-top: 1px solid var(--line); margin: 16px 0 14px; }
+.k-opt-title { font-size: 14px; color: var(--amber-soft); margin-bottom: 6px; }
+.k-pick-card strong { color: var(--amber-soft); }
+.k-pair-status { padding: 8px 12px; border-radius: 9px; background: var(--panel-2); }
+.k-pair-status.ok { color: var(--teal); border: 1px solid rgba(56,217,192,.3); }
+.k-pair-status.warn { color: var(--amber); border: 1px solid rgba(242,163,60,.3); }
