@@ -218,49 +218,41 @@ export class KaraokeScorer {
 /** 根据统计结果生成针对性练习建议（不是诊断，只给可执行动作）。 */
 export function buildTips(r) {
   const tips = [];
-  if (r.total < 150) {
-    return ['唱到的片段太短，先完整跟唱一段（30 秒以上）再来看指导。'];
-  }
+  if (r.total < 150) return [{ key: 'tip.tooShort' }];
   const oct = (r.octaveUp || 0) + (r.octaveDown || 0);
   if (oct >= 5 && (r.voicedFrames || 0) < 10) {
     // 几乎全程和原唱差八度：典型是"这首歌不合你的音域"，而不是音准不好
-    if (r.octaveUp >= r.octaveDown) {
-      tips.push('你的音整体比原唱高了一个八度以上，说明这首歌对你偏低。可以整体升 key 唱，或者直接用胸声往下压着唱。');
-    } else {
-      tips.push('你的音整体比原唱低了一个八度以上，说明副歌的高音超出了你目前的音域。建议先降 key、用头声轻声把高音带过去，别硬喊。');
-    }
-    tips.push('先用「跟唱练习」把这首歌的最高音和最低音单独哼几遍，确认自己能稳定发出，再回来整首跟唱。');
+    tips.push({ key: r.octaveUp >= r.octaveDown ? 'tip.octaveUp' : 'tip.octaveDown' });
+    tips.push({ key: 'tip.octaveExtra' });
     return tips;
   }
   if (r.coverage < 0.4 || (r.voicedFrames || 0) < 10) {
-    tips.push('麦克风没怎么听到你的声音（可能没开口，或者被伴奏盖住了）。建议戴耳机、把伴奏音量调到能听见自己，再把麦克风靠近一些，重新唱一遍。');
+    tips.push({ key: 'tip.noVoice' });
     return tips;
   }
   const mean = r.meanCents;
   const abs = r.avgAbsCents;
   if (mean != null && abs != null) {
-    if (mean <= -35) {
-      tips.push('整体偏低约 ' + Math.round(Math.abs(mean)) + ' 音分。练法：跟着伴奏先只唱每句的最后一个长音，用钢琴或本工具的音准仪定住，再回到整句；起句时稍微"往上顶"一点，不要一开口就松。');
-    } else if (mean >= 35) {
-      tips.push('整体偏高约 ' + Math.round(mean) + ' 音分。练法：很多人一紧张就越唱越高。试试把音量降一点、气息放稳，先轻声哼一遍找准高度再放声。');
-    } else if (abs <= 30) {
-      tips.push('整体音高很稳（平均偏差 ' + Math.round(abs) + ' 音分），方向感没问题，可以开始练长音的稳定度和换气。');
-    } else {
-      tips.push('没有系统性偏高或偏低，但每个字落点不够准。建议放慢到 0.75 倍速，先唱准再恢复原速。');
-    }
+    if (mean <= -35) tips.push({ key: 'tip.flat', vars: { n: Math.round(Math.abs(mean)) } });
+    else if (mean >= 35) tips.push({ key: 'tip.sharp', vars: { n: Math.round(mean) } });
+    else if (abs <= 30) tips.push({ key: 'tip.stable', vars: { n: Math.round(abs) } });
+    else tips.push({ key: 'tip.unsystematic' });
   }
-  if (r.stdCents != null && r.stdCents > 55) {
-    tips.push('音高波动较大（±' + Math.round(r.stdCents) + ' 音分）。多练长音（一口气唱 6-8 秒同一个音），把曲线唱成直线再唱歌词。');
-  }
-  if (r.octaveUp + r.octaveDown >= 5) {
-    tips.push('有 ' + (r.octaveUp + r.octaveDown) + ' 帧和原唱差了一个八度以上，通常是这首歌超出了你目前的舒适音域。可以换调唱，或者用假声/头声把高音部分带过去。');
-  }
-  if (r.worst.length) {
+  if (r.stdCents != null && r.stdCents > 55) tips.push({ key: 'tip.wobble', vars: { n: Math.round(r.stdCents) } });
+  if (r.octaveUp + r.octaveDown >= 5) tips.push({ key: 'tip.octaveFrames', vars: { n: r.octaveUp + r.octaveDown } });
+  if (r.worst && r.worst.length) {
     const seg = r.worst[0];
-    const label = seg.text ? '「' + seg.text.slice(0, 12) + '」' : Math.round(seg.start) + 's 附近';
-    tips.push('最需要单独练的是 ' + label + '（约 ' + Math.round(seg.start) + 's 处，音准 ' + Math.round(seg.acc * 100) + '%）。把这一句单独循环 10 遍，唱对了再连起来。');
+    tips.push({
+      key: 'tip.worstSeg',
+      vars: {
+        label: seg.text ? '"' + seg.text.slice(0, 12) + '"' : '',
+        near: Math.round(seg.start) + 's',
+        t: Math.round(seg.start),
+        acc: Math.round(seg.acc * 100),
+      },
+    });
   }
-  if (!tips.length) tips.push('继续保持，可以尝试更难的歌或提高对自己的要求。');
+  if (!tips.length) tips.push({ key: 'tip.keepGoing' });
   return tips;
 }
 

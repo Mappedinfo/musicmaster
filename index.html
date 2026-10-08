@@ -16,23 +16,31 @@
     <span class="brand-mark">𝄞</span>
     <div class="brand-text">
       <h1>MusicMaster</h1>
-      <p>歌声练功房 · 实时科学发声分析</p>
+      <p data-i18n="app.tagline">歌声练功房 · 实时科学发声分析</p>
     </div>
+  </div>
+  <div class="header-tools">
+    <label class="lang-picker" title="Language / 语言">
+      <select id="langSelect" aria-label="Language">
+        <option value="zh">中文</option>
+        <option value="en">English</option>
+      </select>
+    </label>
   </div>
   <div class="mic-control">
     <button id="micBtn" class="btn btn-primary">
-      <span class="mic-dot" id="micDot"></span><span id="micBtnText">启用麦克风</span>
+      <span class="mic-dot" id="micDot"></span><span id="micBtnText" data-i18n="mic.enable">启用麦克风</span>
     </button>
-    <p class="mic-hint" id="micHint">所有分析都在你的浏览器本地完成，录音不会上传</p>
+    <p class="mic-hint" id="micHint" data-i18n="mic.privacy">所有分析都在你的浏览器本地完成，录音不会上传</p>
   </div>
 </header>
 
 <nav class="tabs" role="tablist">
-  <button class="tab active" data-tab="tuner" role="tab">🎙️ 音准仪</button>
-  <button class="tab" data-tab="practice" role="tab">🎵 跟唱练习</button>
-  <button class="tab" data-tab="karaoke" role="tab">🎤 K歌跟唱</button>
-  <button class="tab" data-tab="spectrum" role="tab">🌈 共鸣与频谱</button>
-  <button class="tab" data-tab="learn" role="tab">📖 入门课程</button>
+  <button class="tab active" data-tab="tuner" role="tab" data-i18n="tab.tuner">🎙️ 音准仪</button>
+  <button class="tab" data-tab="practice" role="tab" data-i18n="tab.practice">🎵 跟唱练习</button>
+  <button class="tab" data-tab="karaoke" role="tab" data-i18n="tab.karaoke">🎤 K歌跟唱</button>
+  <button class="tab" data-tab="spectrum" role="tab" data-i18n="tab.spectrum">🌈 共鸣与频谱</button>
+  <button class="tab" data-tab="learn" role="tab" data-i18n="tab.learn">📖 入门课程</button>
 </nav>
 
 <main>
@@ -50,32 +58,32 @@
         </div>
         <canvas id="centsGauge" width="520" height="190" aria-label="音分偏差表盘"></canvas>
         <div class="cents-readout"><span id="tunerCents">0</span><small> cents</small></div>
-        <div class="clarity-bar" title="信号清晰度（泛音周期性强度）">
+        <div class="clarity-bar" data-i18n-attr="title:tuner.clarityTitle" title="信号清晰度（泛音周期性强度）">
           <div class="clarity-fill" id="clarityFill"></div>
         </div>
-        <p class="card-caption">清晰度越高，音高检测越可靠。轻声哼 "wu——" 通常最稳定。</p>
-        <label class="octave-setting">音名八度基准
+        <p class="card-caption" data-i18n="tuner.clarityHint">清晰度越高，音高检测越可靠。轻声哼 "wu——" 通常最稳定。</p>
+        <label class="octave-setting"><span data-i18n="octave.label">音名八度基准</span>
           <select id="octaveBase">
-            <option value="0">C4 = 中央 C（GarageBand / Logic / 科学音高记号）</option>
-            <option value="1">C3 = 中央 C（Cubase / MuseScore / 部分硬件）</option>
+            <option value="0" data-i18n="octave.optC4">C4 = 中央 C（GarageBand / Logic / 科学音高记号）</option>
+            <option value="1" data-i18n="octave.optC3">C3 = 中央 C（Cubase / MuseScore / 部分硬件）</option>
           </select>
         </label>
-        <p class="card-caption">同一个音在不同软件里八度编号可能差一位。选和你的琴/软件一致的那项，界面上所有音名都会跟着变；音高检测本身不受影响。</p>
+        <p class="card-caption" data-i18n="octave.hint">同一个音在不同软件里八度编号可能差一位。选和你的琴/软件一致的那项，界面上所有音名都会跟着变；音高检测本身不受影响。</p>
         <details class="octave-help">
-          <summary>怎么确认？看 Hz 数字最可靠</summary>
-          <p>音名可以有两套叫法，频率不会骗人：</p>
+          <summary data-i18n="octave.helpSummary">怎么确认？看 Hz 数字最可靠</summary>
+          <p data-i18n="octave.helpP1">音名可以有两套叫法，频率不会骗人：</p>
           <ul>
-            <li><b>约 131 Hz</b> → 男声常用的低音 C（GarageBand 里叫 C3，Cubase 里叫 C2）</li>
-            <li><b>约 262 Hz</b> → 中央 C，也就是钢琴正中间那个 C（GarageBand 里叫 C4，Cubase 里叫 C3）</li>
-            <li><b>约 440 Hz</b> → 标准音 A</li>
+            <li><b data-i18n="octave.helpLi1">约 131 Hz</b> → <span data-i18n="octave.helpLi1b">男声常用的低音 C（GarageBand 里叫 C3，Cubase 里叫 C2）</span></li>
+            <li><b data-i18n="octave.helpLi2">约 262 Hz</b> → <span data-i18n="octave.helpLi2b">中央 C，也就是钢琴正中间那个 C（GarageBand 里叫 C4，Cubase 里叫 C3）</span></li>
+            <li><b data-i18n="octave.helpLi3">约 440 Hz</b> → <span data-i18n="octave.helpLi3b">标准音 A</span></li>
           </ul>
-          <p>用你的琴弹一个音，看这里显示的 Hz 是否和上面一致。若你的软件把中央 C 写作 C3，就选第二项，两边就对齐了。</p>
+          <p data-i18n="octave.helpP2">用你的琴弹一个音，看这里显示的 Hz 是否和上面一致。若你的软件把中央 C 写作 C3，就选第二项，两边就对齐了。</p>
         </details>
       </div>
       <div class="card curve-card">
-        <h3>音高曲线</h3>
+        <h3 data-i18n="tuner.curveTitle">音高曲线</h3>
         <canvas id="pitchCurve" width="760" height="360"></canvas>
-        <p class="card-caption">横轴是时间，纵轴是音高（每格一个半音）。试着唱一条平稳直线，再试试滑音。</p>
+        <p class="card-caption" data-i18n="tuner.curveHint">横轴是时间，纵轴是音高（每格一个半音）。试着唱一条平稳直线，再试试滑音。</p>
       </div>
     </div>
   </section>
@@ -83,23 +91,23 @@
   <!-- ============ 跟唱练习 ============ -->
   <section id="tab-practice" class="tab-panel">
     <div class="practice-head">
-      <label class="key-select">选择调性
+      <label class="key-select"><span data-i18n="practice.keyLabel">选择调性</span>
         <select id="keySelect"></select>
       </label>
-      <p class="key-hint">音高偏高或偏低都可以换调，选你唱着最舒服的。</p>
+      <p class="key-hint" data-i18n="practice.keyHint">音高偏高或偏低都可以换调，选你唱着最舒服的。</p>
     </div>
     <div class="exercise-grid" id="exerciseGrid"></div>
 
     <div class="card runner-card" id="runnerCard" hidden>
       <div class="runner-head">
         <h3 id="runnerTitle"></h3>
-        <button class="btn btn-ghost" id="stopExerciseBtn">结束练习</button>
+        <button class="btn btn-ghost" id="stopExerciseBtn" data-i18n="practice.stop">结束练习</button>
       </div>
       <p class="runner-desc" id="runnerDesc"></p>
       <div class="step-dots" id="stepDots"></div>
       <div class="runner-stage">
         <div class="target-display">
-          <div class="target-label" id="runnerPhase">准备</div>
+          <div class="target-label" id="runnerPhase" data-i18n="practice.ready">准备</div>
           <div class="target-note" id="runnerTarget">--</div>
           <div class="target-cents" id="runnerLiveCents"></div>
         </div>
@@ -110,17 +118,17 @@
     </div>
 
     <div class="card range-card">
-      <h3>🧭 音域测试</h3>
-      <p>在舒适范围内，先唱你最低的音、再唱最高的音（可以分次）。工具会记录你能稳定发出的音域。</p>
+      <h3 data-i18n="range.title">🧭 音域测试</h3>
+      <p data-i18n="range.desc">在舒适范围内，先唱你最低的音、再唱最高的音（可以分次）。工具会记录你能稳定发出的音域。</p>
       <div class="range-controls">
-        <button class="btn btn-secondary" id="rangeStartBtn">开始记录</button>
-        <button class="btn btn-ghost" id="rangeResetBtn">清除</button>
+        <button class="btn btn-secondary" id="rangeStartBtn" data-i18n="range.start">开始记录</button>
+        <button class="btn btn-ghost" id="rangeResetBtn" data-i18n="range.clear">清除</button>
       </div>
-      <div class="range-result" id="rangeResult">尚未记录。录音开始后随便哼唱即可。</div>
+      <div class="range-result" id="rangeResult" data-i18n="range.empty">尚未记录。录音开始后随便哼唱即可。</div>
     </div>
 
     <div class="card history-card">
-      <h3>📈 练习记录</h3>
+      <h3 data-i18n="history.title">📈 练习记录</h3>
       <div id="historyList" class="history-list"><p class="muted">还没有练习记录，完成一次跟唱练习后会自动保存在本机。</p></div>
     </div>
   </section>
@@ -128,19 +136,19 @@
   <!-- ============ K歌跟唱 ============ -->
   <section id="tab-karaoke" class="tab-panel">
     <div class="card karaoke-head">
-      <h3>🎤 K歌跟唱：用你自己的歌练</h3>
-      <p class="muted">选一首歌（BGM 或原唱），浏览器会在本地分析出它的旋律线，然后你跟着唱，工具实时对比你和原唱的每个音，唱完给出逐句指导。<strong>音频只在你的浏览器内存里，不会上传，也不会保存在本机。</strong></p>
+      <h3 data-i18n="k.title">🎤 K歌跟唱：用你自己的歌练</h3>
+      <p class="muted"><span data-i18n="k.desc1">选一首歌（BGM 或原唱），浏览器会在本地分析出它的旋律线，然后你跟着唱，工具实时对比你和原唱的每个音，唱完给出逐句指导。</span><strong data-i18n="k.desc2">音频只在你的浏览器内存里，不会上传，也不会保存在本机。</strong></p>
       <div id="karaokeLoading" class="karaoke-loading" hidden>
         <div class="progress-bar"><div class="progress-fill" id="karaokeProgressFill"></div></div>
-        <p class="muted" id="karaokeProgressText">准备中…</p>
+        <p class="muted" id="karaokeProgressText" data-i18n="k.prepare">准备中…</p>
       </div>
       <div class="k-controls">
-        <button class="btn btn-ghost" id="karaokePlayBtn">▶ 开始跟唱</button>
-        <button class="btn btn-ghost" id="karaokeRestartBtn">↺ 重唱</button>
-        <label class="k-volume">伴奏音量 <input type="range" id="karaokeVol" min="0" max="100" value="90"></label>
-        <label class="k-check"><input type="checkbox" id="karaokeEcho"> 外放模式（回声消除，建议戴耳机时关闭）</label>
+        <button class="btn btn-ghost" id="karaokePlayBtn" data-i18n="k.play">▶ 开始跟唱</button>
+        <button class="btn btn-ghost" id="karaokeRestartBtn" data-i18n="k.restart">↺ 重唱</button>
+        <label class="k-volume"><span data-i18n="k.volume">伴奏音量</span> <input type="range" id="karaokeVol" min="0" max="100" value="90"></label>
+        <label class="k-check"><input type="checkbox" id="karaokeEcho"> <span data-i18n="k.echo">外放模式（回声消除，建议戴耳机时关闭）</span></label>
       </div>
-      <p class="karaoke-hint" id="karaokeHint">先点右上角「启用麦克风」，再点「开始跟唱」。戴耳机练习效果最好。</p>
+      <p class="karaoke-hint" id="karaokeHint" data-i18n="k.hintIdle">先点右上角「启用麦克风」，再点「开始跟唱」。戴耳机练习效果最好。</p>
     </div>
 
     <div class="karaoke-grid">
@@ -151,45 +159,45 @@
             <span class="k-now-note" id="karaokeNowNote">--</span>
           </div>
           <div class="k-live-score">
-            <span id="karaokeLiveScore">--</span><small> 分</small>
+            <span id="karaokeLiveScore">--</span><small data-i18n="k.timeLabel"> 分</small>
             <span class="k-live-sub" id="karaokeLiveCents"></span>
           </div>
         </div>
         <canvas id="karaokeCanvas" width="820" height="330"></canvas>
-        <p class="card-caption">灰色线是参考音高，彩色点是你唱的音；点在线上方表示唱高、下方表示唱低。绿=准，黄=接近，红=偏。</p>
+        <p class="card-caption" data-i18n="k.canvasCaption">灰色线是参考音高，彩色点是你唱的音；点在线上方表示唱高、下方表示唱低。绿=准，黄=接近，红=偏。</p>
       </div>
 
       <div class="card k-status-card">
-        <h3>实时状态</h3>
+        <h3 data-i18n="k.statusTitle">实时状态</h3>
         <div class="k-status">
-          <div><span>参考音</span><b id="karaokeRef">--</b></div>
-          <div><span>你的音</span><b id="karaokeMine">--</b></div>
-          <div><span>音分差</span><b id="karaokeCents">--</b></div>
-          <div><span>麦克风</span><b id="karaokeLevel">--</b></div>
+          <div><span data-i18n="k.refNote">参考音</span><b id="karaokeRef">--</b></div>
+          <div><span data-i18n="k.myNote">你的音</span><b id="karaokeMine">--</b></div>
+          <div><span data-i18n="k.centsDiff">音分差</span><b id="karaokeCents">--</b></div>
+          <div><span data-i18n="k.micLevel">麦克风</span><b id="karaokeLevel">--</b></div>
         </div>
-        <div class="k-lyric" id="karaokeLyric">（上传 .lrc 歌词后，会在这里逐句显示）</div>
-        <label class="file-btn" for="lrcFile">＋ 上传歌词 .lrc（可选，用于逐句评分）</label>
+        <div class="k-lyric" id="karaokeLyric" data-i18n="k.lyricEmpty">（上传 .lrc 歌词后，会在这里逐句显示）</div>
+        <label class="file-btn" for="lrcFile" data-i18n="k.lrcBtn">＋ 上传歌词 .lrc（可选，用于逐句评分）</label>
         <input type="file" id="lrcFile" accept=".lrc,.txt,text/plain" hidden>
       </div>
 
       <div class="card k-pick-card">
-        <h3>选择歌曲</h3>
-        <label class="file-btn big" for="songFile">🎵 选择本地音频文件</label>
+        <h3 data-i18n="k.pickTitle">选择歌曲</h3>
+        <label class="file-btn big" for="songFile" data-i18n="k.pickBtn">🎵 选择本地音频文件</label>
         <input type="file" id="songFile" accept="audio/*" hidden>
-        <p class="muted" id="karaokeFileInfo">支持 mp3 / m4a / wav / flac。文件不会离开你的设备。</p>
-        <p class="muted">用「带人声的歌曲」效果最好，因为工具要听出原唱的旋律；纯伴奏因为没有清晰主旋律，分析结果可能不准。</p>
+        <p class="muted" id="karaokeFileInfo" data-i18n="k.pickInfo">支持 mp3 / m4a / wav / flac。文件不会离开你的设备。</p>
+        <p class="muted" data-i18n="k.pickWarning">用「带人声的歌曲」效果最好，因为工具要听出原唱的旋律；纯伴奏因为没有清晰主旋律，分析结果可能不准。</p>
       </div>
 
       <div class="card k-report-card" id="karaokeReport" hidden></div>
       <div class="card k-guide-card">
-        <h3>怎么练才有效</h3>
+        <h3 data-i18n="k.guideTitle">怎么练才有效</h3>
         <ol class="exp-list">
-          <li>戴耳机：手机上外放的话，工具会把伴奏也当成你的声音，评分就失真了。</li>
-          <li>第一遍别用力，先轻声跟一遍，让工具判断"偏高"还是"偏低"。</li>
-          <li>第二遍只练报告里点出的最难那一句，循环十次，再连起来唱。</li>
-          <li>拿到 80 分以上，把这首歌放到「共鸣与频谱」里看胸声/头声倾向，检验高音是不是硬挤出来的。</li>
+          <li data-i18n="k.guideLi1">戴耳机：手机上外放的话，工具会把伴奏也当成你的声音，评分就失真了。</li>
+          <li data-i18n="k.guideLi2">第一遍别用力，先轻声跟一遍，让工具判断"偏高"还是"偏低"。</li>
+          <li data-i18n="k.guideLi3">第二遍只练报告里点出的最难那一句，循环十次，再连起来唱。</li>
+          <li data-i18n="k.guideLi4">拿到 80 分以上，把这首歌放到「共鸣与频谱」里看胸声/头声倾向，检验高音是不是硬挤出来的。</li>
         </ol>
-        <p class="muted">说明：本工具的参考旋律是从你的音频里自动提取的，可能受伴奏影响；评分和指导是练习参考，不是声乐或医学诊断。</p>
+        <p class="muted" data-i18n="k.guideNote">说明：本工具的参考旋律是从你的音频里自动提取的，可能受伴奏影响；评分和指导是练习参考，不是声乐或医学诊断。</p>
       </div>
     </div>
   </section>
@@ -198,26 +206,26 @@
   <section id="tab-spectrum" class="tab-panel">
     <div class="spectrum-grid">
       <div class="card spectrum-card">
-        <h3>实时频谱</h3>
+        <h3 data-i18n="spectrum.title">实时频谱</h3>
         <canvas id="spectrumCanvas" width="760" height="300"></canvas>
-        <p class="card-caption">纵轴是能量，横轴是频率（对数刻度）。唱歌时能看到基频和一串谐波峰。</p>
+        <p class="card-caption" data-i18n="spectrum.hint">纵轴是能量，横轴是频率（对数刻度）。唱歌时能看到基频和一串谐波峰。</p>
       </div>
       <div class="metrics-col">
-        <div class="metric-card"><div class="metric-value" id="mCentroid">--</div><div class="metric-name">频谱质心</div><div class="metric-desc">声音的"明亮度"重心，Hz</div></div>
-        <div class="metric-card"><div class="metric-value" id="mSF">--</div><div class="metric-name">歌手共振峰</div><div class="metric-desc">2.5–3.5kHz 能量占比；歌声"穿透力"的代理</div></div>
-        <div class="metric-card"><div class="metric-value" id="mH1H2">--</div><div class="metric-name">H1−H2（声区倾向）</div><div class="metric-desc">前两谐波幅度差 dB；同音高下：数值小偏胸声，大偏头声</div></div>
-        <div class="metric-card"><div class="metric-value" id="mLH">--</div><div class="metric-name">低/高频能量比</div><div class="metric-desc">dB；越高越低沉厚重，越低越明亮</div></div>
-        <div class="metric-card"><div class="metric-value" id="mHNR">--</div><div class="metric-name">谐波占比</div><div class="metric-desc">周期性谐波能量比例；气声多会变低</div></div>
+        <div class="metric-card"><div class="metric-value" id="mCentroid">--</div><div class="metric-name" data-i18n="metric.centroid">频谱质心</div><div class="metric-desc" data-i18n="metric.centroidDesc">声音的"明亮度"重心，Hz</div></div>
+        <div class="metric-card"><div class="metric-value" id="mSF">--</div><div class="metric-name" data-i18n="metric.sf">歌手共振峰</div><div class="metric-desc" data-i18n="metric.sfDesc">2.5–3.5kHz 能量占比；歌声"穿透力"的代理</div></div>
+        <div class="metric-card"><div class="metric-value" id="mH1H2">--</div><div class="metric-name" data-i18n="metric.h1h2">H1−H2（声区倾向）</div><div class="metric-desc" data-i18n="metric.h1h2Desc">前两谐波幅度差 dB；同音高下：数值小偏胸声，大偏头声</div></div>
+        <div class="metric-card"><div class="metric-value" id="mLH">--</div><div class="metric-name" data-i18n="metric.lh">低/高频能量比</div><div class="metric-desc" data-i18n="metric.lhDesc">dB；越高越低沉厚重，越低越明亮</div></div>
+        <div class="metric-card"><div class="metric-value" id="mHNR">--</div><div class="metric-name" data-i18n="metric.hnr">谐波占比</div><div class="metric-desc" data-i18n="metric.hnrDesc">周期性谐波能量比例；气声多会变低</div></div>
       </div>
     </div>
     <div class="card experiment-card">
-      <h3>🔬 小实验：感受胸声与头声</h3>
+      <h3 data-i18n="exp.title">🔬 小实验：感受胸声与头声</h3>
       <ol class="exp-list">
-        <li>用平时说话的感觉唱一个低音（比如 C3–G3 附近的 "wu"），这是偏<strong>胸声</strong>的发声：观察低/高频能量比通常较高、质心较低。</li>
-        <li>再用轻飘飘、像吹口哨的感觉唱高八度，这是偏<strong>头声</strong>的发声：能量比通常会下降、谐波占比可能更纯净。</li>
-        <li>最后尝试在两者之间平滑滑动（滑音），找到不"破音"的过渡——这就是混声要训练的东西。</li>
+        <li data-i18n-html="exp.li1"><span>用平时说话的感觉唱一个低音（比如 C3–G3 附近的 "wu"），这是偏<strong>胸声</strong>的发声：观察低/高频能量比通常较高、质心较低。</span></li>
+        <li data-i18n-html="exp.li2"><span>再用轻飘飘、像吹口哨的感觉唱高八度，这是偏<strong>头声</strong>的发声：能量比通常会下降、谐波占比可能更纯净。</span></li>
+        <li data-i18n="exp.li3">最后尝试在两者之间平滑滑动（滑音），找到不"破音"的过渡——这就是混声要训练的东西。</li>
       </ol>
-      <p class="muted">说明：胸声/头声在声学上没有单一的判定指标，这里的数值是帮助你建立直觉的近似参考，不是医学或声乐诊断。</p>
+      <p class="muted" data-i18n="exp.note">说明：胸声/头声在声学上没有单一的判定指标，这里的数值是帮助你建立直觉的近似参考，不是医学或声乐诊断。</p>
     </div>
   </section>
 
@@ -228,8 +236,8 @@
 </main>
 
 <footer class="site-footer">
-  <p>🎤 MusicMaster 是一个纯前端开源项目：无需注册、无服务器、所有音频数据只存在于你的浏览器内存中，关闭页面即消失。练习记录保存在浏览器 localStorage。</p>
-  <p class="muted">建议使用 Chrome / Edge 获得最佳体验。本工具用于学习辅助，不能替代专业声乐老师。</p>
+  <p data-i18n="footer.about">🎤 MusicMaster 是一个纯前端开源项目：无需注册、无服务器、所有音频数据只存在于你的浏览器内存中，关闭页面即消失。练习记录保存在浏览器 localStorage。</p>
+  <p class="muted" data-i18n="footer.tip">建议使用 Chrome / Edge 获得最佳体验。本工具用于学习辅助，不能替代专业声乐老师。</p>
 </footer>
 
 <div class="toast" id="toast" hidden></div>

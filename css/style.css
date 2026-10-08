@@ -547,3 +547,16 @@ button, label, select, input { -webkit-tap-highlight-color: transparent; }
   .card { overflow-wrap: anywhere; }
   #centsGauge, #pitchCurve, #spectrumCanvas, #exerciseCurve, #karaokeCanvas { max-width: 100% !important; }
 }
+
+/* ---------- 语言切换 ---------- */
+.header-tools { display: flex; justify-content: flex-end; }
+.lang-picker select {
+  font: inherit; font-size: 13px; padding: 7px 12px; border-radius: 999px;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--text-dim);
+  cursor: pointer;
+}
+.lang-picker select:focus { outline: none; border-color: var(--teal-dim); color: var(--text); }
+@media (max-width: 900px) {
+  .header-tools { justify-content: flex-start; }
+  .lang-picker select { font-size: 16px; padding: 9px 14px; }
+}

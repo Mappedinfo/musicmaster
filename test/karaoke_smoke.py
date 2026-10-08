@@ -38,7 +38,8 @@ with sync_playwright() as p:
         "--use-fake-ui-for-media-stream",
         "--autoplay-policy=no-user-gesture-required",
     ])
-    page = browser.new_page(viewport={"width": 1280, "height": 980})
+    ctx = browser.new_context(viewport={"width": 1280, "height": 980}, locale="zh-CN")
+    page = ctx.new_page()
     page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(BASE + "/?testtone=440")

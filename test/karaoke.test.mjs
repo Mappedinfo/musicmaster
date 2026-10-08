@@ -64,14 +64,14 @@ check('偏低：音准率低', sFlat.inTune < 0.05, String(sFlat.inTune));
 check('偏低：平均偏差约 60', Math.abs(sFlat.avgAbsCents - 60) < 1, String(sFlat.avgAbsCents));
 check('偏低：倾向为负', sFlat.meanCents < -50, String(sFlat.meanCents));
 const repFlat = sFlat.buildReport();
-check('偏低：给出偏低建议', repFlat.tips.some((t) => t.includes('整体偏低')), repFlat.tips[0]);
+check('偏低：给出偏低建议', repFlat.tips.some((x) => x.key === 'tip.flat'), JSON.stringify(repFlat.tips[0]));
 
 // ---------- 5) 打分器：整体偏高 ----------
 const sSharp = new K.KaraokeScorer({ ref: ref30 });
 feed(sSharp, ref30, 55);
 const repSharp = sSharp.buildReport();
 check('偏高：倾向为正', repSharp.meanCents > 45, String(repSharp.meanCents));
-check('偏高：给出偏高建议', repSharp.tips.some((t) => t.includes('整体偏高')), repSharp.tips[0]);
+check('偏高：给出偏高建议', repSharp.tips.some((x) => x.key === 'tip.sharp'), JSON.stringify(repSharp.tips[0]));
 
 // ---------- 6) 打分器：完全没唱 ----------
 const sSilent = new K.KaraokeScorer({ ref: ref30 });
@@ -82,7 +82,7 @@ check('没唱：偏差统计为空（而不是误报走音）', sSilent.avgAbsCe
   'avg=' + sSilent.avgAbsCents + ' mean=' + sSilent.meanCents);
 check('没唱：missing 帧数=800', sSilent.missing === 800, String(sSilent.missing));
 const repSilent = sSilent.buildReport();
-check('没唱：提示麦克风问题', repSilent.tips.some((t) => t.includes('麦克风')), repSilent.tips[0]);
+check('没唱：提示麦克风问题', repSilent.tips.some((x) => x.key === 'tip.noVoice'), JSON.stringify(repSilent.tips[0]));
 
 // ---------- 7) 打分器：无参考即不计入 ----------
 const sNoRef = new K.KaraokeScorer({ ref: { times: [], midis: [] } });
@@ -96,7 +96,7 @@ const sOct = new K.KaraokeScorer({ ref: ref30 });
 feed(sOct, ref30, 1200, 300);
 check('八度：计到 octaveUp', sOct.octaveUp >= 300, String(sOct.octaveUp));
 const repOct = sOct.buildReport();
-check('八度：给出音域建议', repOct.tips.some((t) => t.includes('八度')), repOct.tips[0]);
+check('八度：给出音域建议', repOct.tips.some((x) => x.key.startsWith('tip.octave')), JSON.stringify(repOct.tips[0]));
 check('八度：八度帧不污染偏差统计', repOct.avgAbsCents == null && repOct.stdCents == null,
   'avg=' + repOct.avgAbsCents + ' std=' + repOct.stdCents);
 
@@ -131,7 +131,7 @@ check('统计：mean 与 avgAbs 同号范围', Math.abs(sSeg.meanCents) <= sSeg.
 // ---------- 12) 短片段提示 ----------
 const sTiny = new K.KaraokeScorer({ ref: ref30 });
 for (let i = 0; i < 30; i++) sTiny.feed(i * 0.03, 69);
-check('太短：提示唱长一点', sTiny.buildReport().tips[0].includes('太短'), sTiny.buildReport().tips[0]);
+check('太短：提示唱长一点', sTiny.buildReport().tips[0].key === 'tip.tooShort', sTiny.buildReport().tips[0].key);
 
 // ---------- 13) 参考音高换算 ----------
 check('220Hz -> MIDI 57', Math.abs(D.freqToMidi(220) - 57) < 0.01, String(D.freqToMidi(220)));

@@ -11,12 +11,22 @@
 - **音名八度基准**：可切换 C4=中央C（GarageBand / Logic / 科学音高记号）或 C3=中央C（Cubase / MuseScore / 部分硬件）。内部一律用 MIDI 编号计算，切换只影响显示。
 - **音域测试**：滑音探测最低/最高音（2%/98% 分位抗噪）。
 - **入门课程**：腹式呼吸、音准与音分、胸声/头声/混声（M1/M2/换声点）、共鸣科学、量化指标速查 + 四周入门计划。
+- **中英双语**：界面、练习、K歌报告与课程正文全部支持中文 / English，右上角切换并记忆选择；默认跟随浏览器语言。
+- **移动端适配**：手机 / iPad / 横屏布局、触摸目标 ≥32px、画布自适应、刘海屏安全区；手机默认开启 K歌外放回声消除。
 
 ## 界面
 
 | 音准仪（音名八度可校准） | K歌跟唱 |
 | --- | --- |
 | ![音准仪](docs/screenshots/octave-base.png) | ![K歌跟唱](docs/screenshots/karaoke.png) |
+
+| 手机（音准仪） | 手机（K歌跟唱） |
+| --- | --- |
+| ![手机音准仪](docs/screenshots/mobile-tuner.png) | ![手机K歌](docs/screenshots/mobile-karaoke.png) |
+
+英文界面（入口课程）：
+
+![English UI](docs/screenshots/en-lessons.png)
 
 ## 技术要点
 
@@ -43,9 +53,11 @@ python3 -m http.server 8901   # 任意静态服务器
 
 ```bash
 node test/dsp.test.mjs          # DSP 单元测试（合成信号验证 YIN 精度等，19 项）
-node test/karaoke.test.mjs      # K歌单元测试（LRC 解析、打分、指导文本，74 项）
+node test/karaoke.test.mjs      # K歌单元测试（LRC 解析、打分、提示键，74 项）
 python3 test/smoke.py           # Playwright 冒烟测试（需 pip install playwright + chromium）
 python3 test/karaoke_smoke.py   # K歌端到端测试（上传 WAV → 提取旋律 → 打分 → 报告）
+python3 test/mobile_smoke.py    # 移动端适配（5 种视口：无横向溢出、触控目标、画布）
+python3 test/i18n_smoke.py      # 中英双语（逐面板扫描残留中文、切换与持久化）
 ```
 
 K歌端到端测试会生成一个 A4 正弦 WAV，验证提取出的参考音高落在 MIDI 69 附近，并检查唱准时的评分与报告渲染。

@@ -9,6 +9,7 @@ import {
   TARGET_SR, parseLRC, activeLyricIndex, KaraokeScorer,
   decodeMono, extractReference, KaraokePlayer,
 } from './karaoke.js';
+import { t, L, initI18n, setLang, getLang, onLangChange, applyI18n } from './i18n.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -43,6 +44,26 @@ const state = {
     fileReady: false,
   },
 };
+
+// ---------- 语言 ----------
+function initLang() {
+  initI18n();
+  const sel = $('#langSelect');
+  if (sel) {
+    sel.value = getLang();
+    sel.addEventListener('change', () => setLang(sel.value));
+  }
+  document.title = t('app.title');
+  // 语言变化后，动态渲染的内容需要重建
+  onLangChange(() => {
+    if (state.karaoke.report) renderKaraokeReport(state.karaoke.report);
+    renderKeyOptions();
+    renderLearn();
+    buildExerciseCards();
+    renderHistory();
+    setKaraokePlayLabel(state.karaoke.player ? state.karaoke.player.playing : false);
+  });
+}
 
 // ---------- 音名显示（八度基准可校准） ----------
 /**
@@ -79,8 +100,8 @@ function initOctaveBase() {
     state.octaveBase = Number(sel.value) || 0;
     try { localStorage.setItem(OCTAVE_BASE_STORAGE, String(state.octaveBase)); } catch (err) { /* ignore */ }
     toast(state.octaveBase === 1
-      ? '已切换：C3 为中央 C（Cubase/MuseScore 习惯）'
-      : '已切换：C4 为中央 C（GarageBand/Logic 习惯）');
+      ? t('octave.toastC3')
+      : t('octave.toastC4'));
   });
 }
 
@@ -107,7 +128,7 @@ const micBtn = $('#micBtn');
 micBtn.addEventListener('click', async () => {
   if (state.micOn) { stopMic(); return; }
   micBtn.disabled = true;
-  $('#micBtnText').textContent = '正在请求权限…';
+  $('#micBtnText').textContent = t('mic.requesting');
   try {
     const testTone = new URLSearchParams(location.search).get('testtone');
     const wantsEcho = !!($('#karaokeEcho') && $('#karaokeEcho').checked);
@@ -118,21 +139,21 @@ micBtn.addEventListener('click', async () => {
     state.micOn = true;
     state.trailStart = performance.now();
     micBtn.classList.add('listening');
-    $('#micBtnText').textContent = '停止录音';
-    $('#micHint').textContent = '正在监听 · 对着麦克风哼 "wu——" 试试';
-    toast('🎙️ 麦克风已开启，开始唱吧！');
+    $('#micBtnText').textContent = t('mic.stop');
+    $('#micHint').textContent = t('mic.listening');
+    toast(t('toast.micOn'));
   } catch (err) {
     console.error(err);
-    let msg = '无法访问麦克风。';
+    let msg = t('micErr.generic');
     if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-      msg = '浏览器只允许在 HTTPS 或 localhost 下使用麦克风，请通过 GitHub Pages 地址访问。';
+      msg = t('micErr.https');
     } else if (err && err.name === 'NotAllowedError') {
-      msg = '麦克风权限被拒绝。请点击地址栏左侧的锁形图标，允许麦克风后重试。';
+      msg = t('micErr.denied');
     } else if (err && err.name === 'NotFoundError') {
-      msg = '没有检测到麦克风设备。';
+      msg = t('micErr.noDevice');
     }
     toast(msg, 5200);
-    $('#micBtnText').textContent = '启用麦克风';
+    $('#micBtnText').textContent = t('mic.enable');
   }
   micBtn.disabled = false;
 });
@@ -150,13 +171,13 @@ function stopMic() {
     state.karaoke.fileReady = false;
     state.karaoke.ref = null;
     state.karaoke.scorer = null;
-    $('#karaokeFileInfo').textContent = '连接已断开。请重新选择歌曲文件。';
+    $('#karaokeFileInfo').textContent = t('k.disconnected');
   }
   engine.stop();
   state.micOn = false;
   micBtn.classList.remove('listening');
-  $('#micBtnText').textContent = '启用麦克风';
-  $('#micHint').textContent = '所有分析都在你的浏览器本地完成，录音不会上传';
+  $('#micBtnText').textContent = t('mic.enable');
+  $('#micHint').textContent = t('mic.privacy');
   $('#tunerNote').textContent = '--';
   $('#tunerFreq').textContent = '0.0 Hz';
 }
@@ -199,7 +220,7 @@ function updateTuner(f, midi) {
     noteEl.classList.remove('flat');
     $('#tunerFreq').textContent = f.frequency.toFixed(1) + ' Hz';
     const solfege = midiToSolfege(n.midi, KEYS[state.currentKey].root);
-    $('#tunerSolfege').textContent = solfege ? '唱名 ' + solfege : '';
+    $('#tunerSolfege').textContent = solfege ? t('tuner.solfege') + solfege : '';
     const cents = Math.max(-50, Math.min(50, n.cents));
     $('#tunerCents').textContent = (n.cents > 0 ? '+' : '') + n.cents;
     $('#tunerCents').style.color = Math.abs(n.cents) <= 15 ? 'var(--teal)' : (Math.abs(n.cents) <= 35 ? 'var(--amber)' : 'var(--red)');
@@ -324,14 +345,26 @@ function drawPitchCurve() {
 }
 
 // ---------- 练习模式 ----------
-function initPractice() {
+function renderKeyOptions() {
   const sel = $('#keySelect');
+  if (!sel) return;
+  const keep = state.currentKey || 0;
+  sel.innerHTML = '';
   KEYS.forEach((k, i) => {
     const opt = document.createElement('option');
-    opt.value = i; opt.textContent = k.label;
+    opt.value = i;
+    opt.textContent = getLang() === 'en' ? (k.labelEn || k.label) : k.label;
     sel.appendChild(opt);
   });
-  sel.addEventListener('change', () => { state.currentKey = +sel.value; buildExerciseCards(); });
+  sel.value = String(keep);
+  if (!sel._bound) {
+    sel._bound = true;
+    sel.addEventListener('change', () => { state.currentKey = +sel.value; buildExerciseCards(); });
+  }
+}
+
+function initPractice() {
+  renderKeyOptions();
   buildExerciseCards();
   renderHistory();
 }
@@ -345,8 +378,10 @@ function buildExerciseCards() {
     const best = history.filter(h => h.exercise === ex.id).reduce((m, h) => Math.max(m, h.avgScore || 0), 0);
     const card = document.createElement('button');
     card.className = 'exercise-card';
-    card.innerHTML = '<div class="ex-icon">' + ex.icon + '</div><h4>' + ex.name + '</h4><p>' + ex.desc + '</p>' +
-      (best > 0 ? '<div class="ex-best">最好成绩 ' + best + ' 分</div>' : '');
+    const exName = L(ex.name, ex.nameEn || ex.name);
+    const exDesc = L(ex.desc, ex.descEn || ex.desc);
+    card.innerHTML = '<div class="ex-icon">' + ex.icon + '</div><h4>' + exName + '</h4><p>' + exDesc + '</p>' +
+      (best > 0 ? '<div class="ex-best">' + t('ex.best', { n: best }) + '</div>' : '');
     card.addEventListener('click', () => selectExercise(ex, card));
     grid.appendChild(card);
   });
@@ -358,13 +393,13 @@ function selectExercise(ex, cardEl) {
   state.selectedEx = ex;
   const rc = $('#runnerCard');
   rc.hidden = false;
-  $('#runnerTitle').textContent = ex.icon + ' ' + ex.name;
-  $('#runnerDesc').textContent = ex.desc;
-  $('#runnerFeedback').innerHTML = '<button class="btn btn-primary" id="startExerciseBtn">▶ 开始练习</button>';
+  $('#runnerTitle').textContent = ex.icon + ' ' + L(ex.name, ex.nameEn || ex.name);
+  $('#runnerDesc').textContent = L(ex.desc, ex.descEn || ex.desc);
+  $('#runnerFeedback').innerHTML = '<button class="btn btn-primary" id="startExerciseBtn">' + t('practice.start') + '</button>';
   $('#runnerSummary').hidden = true;
   $('#stepDots').innerHTML = '';
   $('#runnerTarget').textContent = '--';
-  $('#runnerPhase').textContent = '准备';
+  $('#runnerPhase').textContent = t('practice.ready');
   $('#runnerPhase').className = 'target-label';
   $('#runnerLiveCents').textContent = '';
   rc.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -373,7 +408,7 @@ function selectExercise(ex, cardEl) {
 
 async function startExercise(ex) {
   if (!state.micOn) {
-    toast('请先点击右上角「启用麦克风」');
+    toast(t('toast.needMic'));
     return;
   }
   if (state.runner) return;
@@ -398,7 +433,7 @@ async function startExercise(ex) {
       state.exTarget = ev.midi;
       state.exTrail = [];
       dots.children[ev.index].className = 'step-dot playing';
-      $('#runnerPhase').textContent = '🔊 听示范音';
+      $('#runnerPhase').textContent = t('practice.listen');
       $('#runnerPhase').className = 'target-label';
       $('#runnerTarget').textContent = noteText(ev.midi);
       $('#runnerLiveCents').textContent = '';
@@ -406,7 +441,7 @@ async function startExercise(ex) {
       state.exTarget = ev.midi;
       state.exTrail = [];
       dots.children[ev.index].className = 'step-dot singing';
-      $('#runnerPhase').textContent = '🎤 唱！';
+      $('#runnerPhase').textContent = t('practice.sing');
       $('#runnerPhase').className = 'target-label sing';
     } else if (ev.type === 'step-score') {
       const r = ev.result;
@@ -416,16 +451,16 @@ async function startExercise(ex) {
         const chip = document.createElement('span');
         chip.className = 'fb-chip ' + (good ? 'good' : 'bad');
         const c = r.medianCents;
-        chip.innerHTML = '<b>' + noteText(ev.midi) + '</b> ' + (c > 0 ? '+' : '') + c + '¢ · 稳 ' + r.stability + '¢ · ' + r.score + '分';
+        chip.innerHTML = '<b>' + noteText(ev.midi) + '</b> ' + (c > 0 ? '+' : '') + c + '¢ · ' + t('ex.stable', { v: r.stability }) + ' · ' + r.score + t('ex.points');
         fb.appendChild(chip);
       } else {
         const chip = document.createElement('span');
         chip.className = 'fb-chip bad';
-        chip.textContent = noteText(ev.midi) + ' 没听清你的声音';
+        chip.textContent = t('ex.notHeard', { note: noteText(ev.midi) });
         fb.appendChild(chip);
       }
       state.exTarget = null;
-      $('#runnerPhase').textContent = '准备';
+      $('#runnerPhase').textContent = t('practice.ready');
       $('#runnerPhase').className = 'target-label';
     } else if (ev.type === 'done') {
       state.runner = null;
@@ -433,14 +468,14 @@ async function startExercise(ex) {
       const s = ev.summary;
       const sum = $('#runnerSummary');
       sum.hidden = false;
-      sum.innerHTML = '<div class="big-score">' + s.avgScore + ' 分</div>' +
-        '<p>完成 ' + s.sung + '/' + s.steps + ' 个音。' + summaryComment(s.avgScore) + '</p>' +
-        '<p style="margin-top:10px"><button class="btn btn-secondary" id="againBtn">再练一次</button></p>';
+      sum.innerHTML = '<div class="big-score">' + s.avgScore + t('ex.points') + '</div>' +
+        '<p>' + t('ex.summary', { sung: s.sung, steps: s.steps }) + summaryComment(s.avgScore) + '</p>' +
+        '<p style="margin-top:10px"><button class="btn btn-secondary" id="againBtn">' + t('practice.again') + '</button></p>';
       $('#againBtn').addEventListener('click', () => startExercise(ex));
       saveSession({ exercise: ex.id, name: ex.name, avgScore: s.avgScore, steps: s.steps, sung: s.sung });
       renderHistory();
       buildExerciseCards();
-      $('#runnerPhase').textContent = '完成';
+      $('#runnerPhase').textContent = t('practice.done');
       $('#runnerTarget').textContent = '🎉';
       $('#runnerLiveCents').textContent = '';
     }
@@ -449,22 +484,22 @@ async function startExercise(ex) {
 }
 
 function summaryComment(score) {
-  if (score >= 85) return '非常棒！音准和稳定性都很出色，可以试试更高难度或换个调。';
-  if (score >= 70) return '不错！大部分音都唱准了，注意个别偏低/偏高的音。';
-  if (score >= 50) return '有进步空间。跟着示范音慢一些唱，先求准再求稳。';
-  return '没关系，初学者大多从这里开始。先练「单音模唱」，每次只专注于一个音。';
+  if (score >= 85) return t('summary.85');
+  if (score >= 70) return t('summary.70');
+  if (score >= 50) return t('summary.50');
+  return t('summary.low');
 }
 
 $('#stopExerciseBtn').addEventListener('click', () => stopExercise());
 function stopExercise() {
   if (state.runner) { state.runner.cancel(); state.runner = null; }
   state.exTarget = null;
-  $('#runnerPhase').textContent = '已停止';
+  $('#runnerPhase').textContent = t('practice.stopped');
   $('#runnerPhase').className = 'target-label';
   $('#runnerLiveCents').textContent = '';
   const fb = $('#runnerFeedback');
   if (state.selectedEx) {
-    fb.innerHTML = '<button class="btn btn-primary" id="startExerciseBtn">▶ 开始练习</button>';
+    fb.innerHTML = '<button class="btn btn-primary" id="startExerciseBtn">' + t('practice.start') + '</button>';
     $('#startExerciseBtn').addEventListener('click', () => startExercise(state.selectedEx));
   }
 }
@@ -537,26 +572,25 @@ function drawExerciseCurve() {
 $('#rangeStartBtn').addEventListener('click', () => {
   if (!state.micOn) { toast('请先启用麦克风'); return; }
   state.range.active = !state.range.active;
-  $('#rangeStartBtn').textContent = state.range.active ? '停止并查看结果' : '开始记录';
+  $('#rangeStartBtn').textContent = state.range.active ? t('range.stop') : t('range.start');
   if (state.range.active) {
     state.range.midis = [];
-    $('#rangeResult').textContent = '记录中……先哼一个最低的音，再哼一个最高的音。';
+    $('#rangeResult').textContent = t('range.recording');
   } else {
     showRangeResult();
   }
 });
 $('#rangeResetBtn').addEventListener('click', () => {
   state.range.midis = [];
-  $('#rangeResult').textContent = '尚未记录。录音开始后随便哼唱即可。';
+  $('#rangeResult').textContent = t('range.empty');
 });
 function showRangeResult() {
   const ms = state.range.midis;
-  if (ms.length < 10) { $('#rangeResult').textContent = '采集到的有效声音太少，再试一次（唱清楚一点、时间长一点）。'; return; }
+  if (ms.length < 10) { $('#rangeResult').textContent = t('range.tooFew'); return; }
   ms.sort((a, b) => a - b);
   const lo = ms[Math.floor(ms.length * 0.02)];
   const hi = ms[Math.min(ms.length - 1, Math.floor(ms.length * 0.98))];
-  $('#rangeResult').innerHTML = '你的可用音域大约是 <b>' + noteText(lo) + '</b> — <b>' + noteText(hi) + '</b>' +
-    '（约 ' + (Math.round((hi - lo) * 10) / 10) + ' 个半音）。普通人的舒适音域一般在 12–18 个半音，练声可以逐步扩展。';
+  $('#rangeResult').innerHTML = t('range.result', { lo: noteText(lo), hi: noteText(hi), n: Math.round((hi - lo) * 10) / 10 });
 }
 
 // ---------- 频谱 ----------
@@ -627,23 +661,30 @@ function drawSpectrum() {
 }
 
 // ---------- 课程内容 ----------
+/** 选择语言对应的字段；缺英文时退回中文，保证不会出现空内容 */
+function pick(zh, en, useEn) {
+  return useEn && en ? en : zh;
+}
+
 function renderLearn() {
   const root = $('#learnContent');
   let html = '';
   for (const lesson of LESSONS) {
-    html += '<div class="lesson"><h2>' + lesson.title + '</h2>';
-    if (lesson.sub) html += '<div class="lesson-sub">' + lesson.sub + '</div>';
+    const en = getLang() === 'en';
+    html += '<div class="lesson"><h2>' + pick(lesson.title, lesson.titleEn, en) + '</h2>';
+    if (lesson.sub) html += '<div class="lesson-sub">' + pick(lesson.sub, lesson.subEn, en) + '</div>';
     for (const block of lesson.blocks) {
       html += '<div class="card">';
-      if (block.h4) html += '<h4>' + block.h4 + '</h4>';
-      html += block.html;
+      if (block.h4) html += '<h4>' + pick(block.h4, block.h4En, en) + '</h4>';
+      html += pick(block.html, block.htmlEn, en);
       html += '</div>';
     }
     html += '</div>';
   }
-  html += '<div class="lesson"><h2>🗓️ 入门四周计划</h2><div class="lesson-sub">每天 10–15 分钟即可，贵在坚持。练习前后各喝温水，嗓子疼就休息。</div><div class="card"><div class="week-plan">';
+  const enWeek = getLang() === 'en';
+  html += '<div class="lesson"><h2>' + t('learn.weekTitle') + '</h2><div class="lesson-sub">' + t('learn.weekSub') + '</div><div class="card"><div class="week-plan">';
   for (const w of WEEK_PLAN) {
-    html += '<div class="week"><b>' + w.week + '</b><p>' + w.text + '</p></div>';
+    html += '<div class="week"><b>' + pick(w.week, w.weekEn, enWeek) + '</b><p>' + pick(w.text, w.textEn, enWeek) + '</p></div>';
   }
   html += '</div></div></div>';
   root.innerHTML = html;
@@ -654,7 +695,7 @@ function renderHistory() {
   const list = $('#historyList');
   const h = loadHistory();
   if (!h.length) {
-    list.innerHTML = '<p class="muted">还没有练习记录，完成一次跟唱练习后会自动保存在本机。</p>';
+    list.innerHTML = '<p class="muted">' + t('history.empty') + '</p>';
     return;
   }
   list.innerHTML = '';
@@ -662,8 +703,9 @@ function renderHistory() {
     const d = new Date(rec.at);
     const item = document.createElement('div');
     item.className = 'history-item';
-    item.innerHTML = '<span>' + (rec.name || rec.exercise) + ' · ' + rec.sung + '/' + rec.steps + ' 音</span>' +
-      '<span><span class="h-score">' + rec.avgScore + ' 分</span> <span class="h-time">' +
+    const recLabel = rec.exercise === 'karaoke' ? (rec.name || '') : t('history.item', { sung: rec.sung, steps: rec.steps });
+    item.innerHTML = '<span>' + recLabel + '</span>' +
+      '<span><span class="h-score">' + rec.avgScore + t('ex.points') + '</span> <span class="h-time">' +
       (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + '</span></span>';
     list.appendChild(item);
   });
@@ -710,6 +752,8 @@ function initKaraoke() {
   });
   k.player = player;
 
+  setKaraokePlayLabel(false);
+
   const songInput = $('#songFile');
   const lrcInput = $('#lrcFile');
   const volInput = $('#karaokeVol');
@@ -726,15 +770,15 @@ function initKaraoke() {
     if (file) {
       const text = await file.text();
       k.lyrics = parseLRC(text);
-      $('#karaokeFileInfo').textContent = '已载入 ' + k.lyrics.length + ' 行歌词；' + k.songName + '。';
-      toast('🎵 已载入 ' + k.lyrics.length + ' 行歌词，唱完会逐句给分');
+      $('#karaokeFileInfo').textContent = t('k.lrcLoaded', { n: k.lyrics.length, name: k.songName });
+      toast(t('k.toastLrc', { n: k.lyrics.length }));
     }
     lrcInput.value = '';
   });
 
   $('#karaokePlayBtn').addEventListener('click', async () => {
-    if (!k.fileReady) { toast('请先选择一首歌（右侧「🎵 选择本地音频文件」）'); return; }
-    if (!state.micOn) { toast('请先点右上角「启用麦克风」，才能录到你的声音'); return; }
+    if (!k.fileReady) { toast(t('k.toastNeedSong')); return; }
+    if (!state.micOn) { toast(t('k.toastNeedMic')); return; }
     if (player.playing) {
       player.pause();
       setKaraokePlayLabel(false);
@@ -747,13 +791,13 @@ function initKaraoke() {
     if (okPlay) {
       setKaraokePlayLabel(true);
       $('#karaokeHint').classList.add('live');
-      $('#karaokeHint').textContent = '正在跟唱 · 灰色是原唱旋律，你的点越靠线越准。';
+      $('#karaokeHint').textContent = t('k.hintLive');
     }
   });
 
   $('#karaokeRestartBtn').addEventListener('click', async () => {
-    if (!k.fileReady) { toast('请先选择一首歌'); return; }
-    if (!state.micOn) { toast('请先点右上角「启用麦克风」'); return; }
+    if (!k.fileReady) { toast(t('k.toastNeedSong')); return; }
+    if (!state.micOn) { toast(t('k.toastNeedMic')); return; }
     k.scorer = new KaraokeScorer({ ref: k.ref, lyrics: k.lyrics });
     k.lastEval = null;
     $('#karaokeReport').hidden = true;
@@ -765,7 +809,7 @@ function initKaraoke() {
 
 function setKaraokePlayLabel(playing) {
   const btn = $('#karaokePlayBtn');
-  if (btn) btn.textContent = playing ? '⏸ 暂停' : '▶ 开始跟唱';
+  if (btn) btn.textContent = playing ? t('k.pause') : t('k.play');
 }
 
 async function loadKaraokeFile(file) {
@@ -780,18 +824,18 @@ async function loadKaraokeFile(file) {
   };
   try {
     loading.hidden = false;
-    show(0.02, '正在解码「' + file.name + '」…');
+    show(0.02, t('k.decode', { name: file.name }));
     await new Promise((r) => setTimeout(r, 40));
     const pcm = await decodeMono(file, TARGET_SR);
-    show(0.2, '已解码 ' + (pcm.length / TARGET_SR).toFixed(0) + ' 秒音频，正在逐帧提取旋律…');
+    show(0.2, t('k.decoded', { sec: (pcm.length / TARGET_SR).toFixed(0) }));
     await new Promise((r) => setTimeout(r, 40));
     const res = await extractReference(pcm, TARGET_SR, (p) => {
-      show(0.2 + 0.78 * p, '提取旋律 ' + Math.round(p * 100) + '%…（长歌曲需要十几秒）');
+      show(0.2 + 0.78 * p, t('k.extracting', { p: Math.round(p * 100) }));
     });
 
     const voiced = res.midis.reduce((n, v) => n + (v != null ? 1 : 0), 0);
     if (voiced < 20) {
-      throw new Error('几乎没提取到稳定旋律。这首可能是纯伴奏或纯打击乐，请换成带人声的版本。');
+      throw new Error(t('k.noMelody'));
     }
 
     k.ref = res;
@@ -800,17 +844,16 @@ async function loadKaraokeFile(file) {
     k.scorer = null;
     const dur = k.player.duration || (res.times.length ? res.times[res.times.length - 1] : 0);
     await k.player.load(file);
-    info.textContent = '已就绪：' + file.name + '（' + formatTime(dur) + '，检测到 ' +
-      (voiced * res.hopSec).toFixed(0) + ' 秒人声旋律）';
+    info.textContent = t('k.ready', { name: file.name, dur: formatTime(dur), sec: (voiced * res.hopSec).toFixed(0) });
 
-    show(1, '完成！点「开始跟唱」开唱');
+    show(1, t('k.donePct'));
     setTimeout(() => { loading.hidden = true; }, 500);
-    toast('✅ 旋律线已提取完成，点「开始跟唱」');
+    toast(t('k.toastReady'));
   } catch (err) {
     console.error(err);
     loading.hidden = true;
-    info.textContent = '分析失败：' + (err && err.message ? err.message : '未知错误');
-    toast('加载失败：' + (err && err.message ? err.message : '未知错误'), 6000);
+    info.textContent = t('k.loadFail', { msg: (err && err.message) ? err.message : 'unknown' });
+    toast(t('k.loadFailToast', { msg: (err && err.message) ? err.message : 'unknown' }), 6000);
   }
 }
 
@@ -818,16 +861,17 @@ function finishKaraoke() {
   const k = KARAOKE;
   const report = k.scorer ? k.scorer.buildReport() : null;
   $('#karaokeHint').classList.remove('live');
-  $('#karaokeHint').textContent = '唱完了。看下面的报告，针对最弱的那一句再练十遍。';
+  $('#karaokeHint').textContent = t('k.hintDone');
   if (!report) return;
   renderKaraokeReport(report);
   if (k.songName) {
-    saveSession({ exercise: 'karaoke', name: 'K歌：' + k.songName, avgScore: report.score, steps: 1, sung: 1 });
+    saveSession({ exercise: 'karaoke', name: t('k.historyPrefix') + k.songName, avgScore: report.score, steps: 1, sung: 1 });
     renderHistory();
   }
 }
 
 function renderKaraokeReport(r) {
+  state.karaoke.report = r;
   const el = $('#karaokeReport');
   const cov = Math.round((r.coverage || 0) * 100);
   const tune = Math.round((r.inTuneRatio || 0) * 100);
@@ -835,32 +879,32 @@ function renderKaraokeReport(r) {
   const mean = r.meanCents == null ? '--' : (r.meanCents > 0 ? '+' : '') + Math.round(r.meanCents);
   const std = r.stdCents == null ? '--' : Math.round(r.stdCents);
 
-  let html = '<h3>🎧 本次跟唱报告</h3>' +
+  let html = '<h3>' + t('k.reportTitle') + '</h3>' +
     '<div class="k-report-head">' +
-      '<div class="k-report-score">' + r.score + '<small> 分</small></div>' +
+      '<div class="k-report-score">' + r.score + '<small>' + t('ex.points') + '</small></div>' +
       '<div class="k-report-stats">' +
-        '<span>音准 <b>' + tune + '%</b></span>' +
-        '<span>平均偏差 <b>' + abs + '</b> 音分</span>' +
-        '<span>整体倾向 <b>' + mean + '</b> 音分</span>' +
-        '<span>波动 <b>±' + std + '</b> 音分</span>' +
-        '<span>覆盖率 <b>' + cov + '%</b></span>' +
+        '<span>' + t('k.statPitch') + ' <b>' + tune + '%</b></span>' +
+        '<span>' + t('k.statAvgDev') + ' <b>' + abs + '</b> ' + t('unit.cents') + '</span>' +
+        '<span>' + t('k.statTendency') + ' <b>' + mean + '</b> ' + t('unit.cents') + '</span>' +
+        '<span>' + t('k.statWobble') + ' <b>±' + std + '</b> ' + t('unit.cents') + '</span>' +
+        '<span>' + t('k.statCoverage') + ' <b>' + cov + '%</b></span>' +
       '</div>' +
     '</div>' +
-    '<div class="k-report"><h4>练习建议</h4><ul>';
-  for (const tip of r.tips) html += '<li>' + escapeHTML(tip) + '</li>';
+    '<div class="k-report"><h4>' + t('k.reportTips') + '</h4><ul>';
+  for (const tip of r.tips) html += '<li>' + escapeHTML(t(tip.key, tip.vars)) + '</li>';
   html += '</ul>';
 
   if (r.segments && r.segments.length) {
     const ranked = r.segments.slice().sort((a, b) => a.acc - b.acc);
     const show = ranked.slice(0, 5);
-    html += '<h4>最需要单独练的片段（点击可跳过去重唱）</h4><div class="k-seg-list">';
+    html += '<h4>' + t('k.reportSegs') + '</h4><div class="k-seg-list">';
     for (const s of show) {
-      const label = s.text ? escapeHTML(s.text.slice(0, 18)) : '（无歌词）';
+      const label = s.text ? escapeHTML(s.text.slice(0, 18)) : t('k.noLyric');
       html += '<div class="k-seg ' + s.style + '">' +
         '<span class="k-seg-t">' + formatTime(s.start) + '</span>' +
         '<span>' + label + '</span>' +
         '<span class="k-seg-acc">' + Math.round(s.acc * 100) + '%</span>' +
-        '<button class="k-seg-btn" data-seek="' + s.start.toFixed(2) + '">从这里唱</button>' +
+        '<button class="k-seg-btn" data-seek="' + s.start.toFixed(2) + '">' + t('k.singHere') + '</button>' +
         '</div>';
     }
     html += '</div>';
@@ -879,7 +923,7 @@ function renderKaraokeReport(r) {
       el.hidden = true;
       const ok2 = await k.player.play();
       if (ok2) setKaraokePlayLabel(true);
-      toast('已跳到 ' + formatTime(t) + '，从这一句开始重唱');
+      toast(t('k.jumpToast', { time: formatTime(t) }));
     });
   });
 }
@@ -926,7 +970,7 @@ function updateKaraokeStatus() {
     const nxt = k.lyrics[idx + 1];
     if (cur) {
       $('#karaokeLyric').innerHTML = escapeHTML(cur.text || '♪') +
-        (nxt && nxt.text ? '<span class="next">下一句：' + escapeHTML(nxt.text) + '</span>' : '');
+        (nxt && nxt.text ? '<span class="next">' + t('k.nextLyric') + escapeHTML(nxt.text) + '</span>' : '');
     }
   }
 }
@@ -1091,8 +1135,11 @@ function escapeHTML(s) {
 // 调试句柄（供自动化测试/控制台排障）
 window.__mm = { state, engine };
 
+initLang();
 initOctaveBase();
 initKaraoke();
+// K歌初始化会改写按钮文案，这里再套用一次语言，保证首屏就是当前语言
+applyI18n(document);
 initPractice();
 renderLearn();
 // 初始空状态：让音名显示占位符而不是残留的渐变块

@@ -5,13 +5,13 @@ import { midiToFreq, midiToNote, centsBetween, freqToMidi, midiToSolfege, scoreC
 
 /** 可选根音（C 大调到 B 大调），值为 MIDI 根音（取男女生通用的中音区） */
 export const KEYS = [
-  { label: 'C 大调', root: 60 },
-  { label: 'D 大调', root: 62 },
-  { label: 'E 大调', root: 64 },
-  { label: 'F 大调', root: 65 },
-  { label: 'G 大调', root: 67 },
-  { label: 'A 大调', root: 69 },
-  { label: 'B♭ 大调', root: 70 },
+  { label: 'C 大调', labelEn: 'C major', root: 60 },
+  { label: 'D 大调', labelEn: 'D major', root: 62 },
+  { label: 'E 大调', labelEn: 'E major', root: 64 },
+  { label: 'F 大调', labelEn: 'F major', root: 65 },
+  { label: 'G 大调', labelEn: 'G major', root: 67 },
+  { label: 'A 大调', labelEn: 'A major', root: 69 },
+  { label: 'B♭ 大调', labelEn: 'B♭ major', root: 70 },
 ];
 
 const SCALE_MAJOR = [0, 2, 4, 5, 7, 9, 11, 12]; // do re mi fa sol la si do'
@@ -20,34 +20,44 @@ const SCALE_MAJOR = [0, 2, 4, 5, 7, 9, 11, 12]; // do re mi fa sol la si do'
 export function buildExercises(root) {
   const list = [
     {
-      id: 'single', icon: '🎯', name: '单音模唱',
+      id: 'single', icon: '🎯', name: '单音模唱', nameEn: 'Match a single note',
       desc: '听一个参考音，然后用 "wu" 或 "la" 唱出同样的音高。训练最基本的音准模仿能力。',
+      descEn: 'Listen to a reference note, then sing the same pitch on "woo" or "la". This trains the most basic pitch-matching skill.',
       tips: ['先听完整再开口', '想象音高的"位置"', '偏差在 ±25 音分内即算优秀'],
+      tipsEn: ['Listen to the whole note before you start', 'Imagine where the pitch sits', 'Within ±25 cents counts as excellent'],
       steps: [0, 4, 7, 12, 7, 4, 0].map(s => ({ midi: root + s, playFirst: true, singMs: 2000 })),
     },
     {
-      id: 'scale-up', icon: '📈', name: '音阶上行 Do→Si',
+      id: 'scale-up', icon: '📈', name: '音阶上行 Do→Si', nameEn: 'Ascending scale do→ti',
       desc: '跟着钢琴声逐级唱 do re mi fa sol la si do，每级都要唱稳再进入下一级。',
+      descEn: 'Sing up the scale step by step with the piano: do re mi fa sol la si do. Hold each step steady before moving on.',
       tips: ['每级唱满整个时值', '留意 fa 和 si 容易偏低', '保持气息均匀，不要越唱越用力'],
+      tipsEn: ['Hold each step for its full value', 'Watch out: fa and ti tend to go flat', 'Keep the airflow even instead of pushing harder'],
       steps: SCALE_MAJOR.map(s => ({ midi: root + s, playFirst: true, singMs: 1400 })),
     },
     {
-      id: 'scale-down', icon: '📉', name: '音阶下行 Si→Do',
+      id: 'scale-down', icon: '📉', name: '音阶下行 Si→Do', nameEn: 'Descending scale ti→do',
       desc: '从高八度的 do 开始往下唱。下行音阶更容易"掉音"，是检查气息支撑的好练习。',
+      descEn: 'Start on the upper do and sing downwards. Descending lines sag more easily, which makes this a good test of breath support.',
       tips: ['下行时保持声音位置不要"垮"', '感觉声音始终在面罩前方'],
+      tipsEn: ['Keep the voice placed as you descend; do not let it collapse', 'Feel the sound staying forward in the mask'],
       steps: [...SCALE_MAJOR].reverse().map(s => ({ midi: root + s, playFirst: true, singMs: 1400 })),
     },
     {
-      id: 'sustain', icon: '🫁', name: '长音稳定',
+      id: 'sustain', icon: '🫁', name: '长音稳定', nameEn: 'Steady long note',
       desc: '深吸一口气，用平稳的气息把一个音保持 6 秒。观察音高曲线是否平直。',
+      descEn: 'Take a deep breath and hold one note for six seconds on even airflow. Watch whether the pitch curve stays flat.',
       tips: ['用腹式呼吸吸气，肩膀不动', '音量保持中等，不要渐强渐弱', '曲线越平，气息控制越好'],
+      tipsEn: ['Breathe from the belly and keep the shoulders still', 'Keep a medium volume; no crescendo or fade', 'The flatter the curve, the better your breath control'],
       steps: [{ midi: root + 4, playFirst: true, singMs: 6000 }],
       longNote: true,
     },
     {
-      id: 'interval', icon: '🪜', name: '五度跳进',
+      id: 'interval', icon: '🪜', name: '五度跳进', nameEn: 'Fifth leaps',
       desc: 'do → sol → do 的五度跳进练习。跳进比级进更难唱准，是音准进阶的关键。',
+      descEn: 'Practise the do → sol → do fifth leap. Leaps are harder to pitch than steps and are the key to advancing.',
       tips: ['唱 sol 前先在心里"预听"它的高度', '上跳时不要喊，保持轻声'],
+      tipsEn: ['Pre-hear the height of sol in your head before singing', 'Do not shout on the leap; stay light'],
       steps: [0, 7, 0, 7, 12, 7, 0].map(s => ({ midi: root + s, playFirst: true, singMs: 1600 })),
     },
   ];
