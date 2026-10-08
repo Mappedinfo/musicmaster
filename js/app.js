@@ -58,6 +58,13 @@ function noteText(midiFloat) {
 
 const OCTAVE_BASE_STORAGE = 'musicmaster.octavebase.v1';
 
+/** 粗略判断是否移动端：手机外放唱歌更常见，默认开回声消除更实用。 */
+function isMobileLike() {
+  const ua = navigator.userAgent || '';
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(ua) ||
+    (navigator.maxTouchPoints > 1 && window.matchMedia('(max-width: 900px)').matches);
+}
+
 function initOctaveBase() {
   let saved = 0;
   try {
@@ -198,7 +205,12 @@ function updateTuner(f, midi) {
     $('#tunerCents').style.color = Math.abs(n.cents) <= 15 ? 'var(--teal)' : (Math.abs(n.cents) <= 35 ? 'var(--amber)' : 'var(--red)');
     drawGauge(cents, f.voiced);
   } else {
+    // 没听到声音：显示占位符并转成纯色，避免渐变文字在空内容时变成色块
     noteEl.classList.add('flat');
+    noteEl.textContent = '--';
+    $('#tunerFreq').textContent = '0.0 Hz';
+    $('#tunerSolfege').textContent = '';
+    $('#tunerCents').textContent = '0';
     drawGauge(0, false);
   }
   $('#clarityFill').style.width = Math.round((f.clarity || 0) * 100) + '%';
@@ -679,6 +691,10 @@ function initKaraoke() {
   KARAOKE.active = true;
   const k = KARAOKE;
 
+  // 手机上默认勾选"外放模式"，减少伴奏被麦克风再收进去
+  const echoBox = $('#karaokeEcho');
+  if (echoBox && isMobileLike()) echoBox.checked = true;
+
   const player = new KaraokePlayer({
     onTime: (t, dur) => { k.time = t; k.duration = dur; },
     onEnded: () => { setKaraokePlayLabel(false); finishKaraoke(); },
@@ -1079,5 +1095,8 @@ initOctaveBase();
 initKaraoke();
 initPractice();
 renderLearn();
+// 初始空状态：让音名显示占位符而不是残留的渐变块
+$('#tunerNote').classList.add('flat');
+$('#tunerNote').textContent = '--';
 drawGauge(0, false);
 requestAnimationFrame(tick);

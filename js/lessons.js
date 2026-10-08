@@ -103,7 +103,7 @@ export const LESSONS = [
     sub: '本应用每个数字的含义与参考基准。',
     blocks: [
       {
-        html: '<table class="metric-table">' +
+        html: '<div class="metric-table-scroll"><table class="metric-table">' +
           '<tr><th>指标</th><th>含义</th><th>参考基准</th></tr>' +
           '<tr><td>音准（cents）</td><td>偏离目标音的音分数，100 音分 = 1 个半音</td><td>±10 优 / ±25 合格 / ±50 唱错音（教学分级）</td></tr>' +
           '<tr><td>稳定性</td><td>长音期间音分偏差的标准差</td><td>≤15 音分为稳；气息不足时尾音会明显抖动</td></tr>' +
@@ -112,7 +112,7 @@ export const LESSONS = [
           '<tr><td>H1−H2</td><td>前两谐波幅度差（dB），声带闭合/声区倾向</td><td>同音高下：小偏胸声，大偏头声（启发式）</td></tr>' +
           '<tr><td>谐波占比</td><td>周期性谐波能量比例</td><td>越高越"实"；气声多会变低</td></tr>' +
           '<tr><td>歌手共振峰</td><td>2.5–3.5 kHz 频带能量占比</td><td>受过训练的歌声在此聚集，"穿透力"代理</td></tr>' +
-          '</table>' +
+          '</table></div>' +
           '<p class="muted" style="margin-top:12px">颤音参考：职业歌手颤音速率约 5.5–8 Hz、幅度约 ±50–100 音分（Seashore/Sundberg 综述）。过快（&gt;8 Hz，"羊声"）或过慢（&lt;4.5 Hz）都提示控制问题。本应用暂不对颤音自动打分。</p>'
       },
       {

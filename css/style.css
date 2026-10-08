@@ -126,7 +126,11 @@ main { padding: 26px clamp(16px, 4vw, 48px) 60px; max-width: 1280px; margin: 0 a
   -webkit-background-clip: text; background-clip: text; color: transparent;
   min-height: 1.1em; transition: opacity .12s;
 }
-.note-name.flat { opacity: .35; }
+.note-name.flat {
+  /* 空状态不要用渐变文字：内容为空时 background-clip:text 会退化成色块 */
+  background: none; -webkit-background-clip: border-box; background-clip: border-box;
+  color: var(--muted); opacity: .5;
+}
 .note-meta { color: var(--text-dim); font-family: var(--mono); font-size: 14px; margin-top: 4px; }
 .note-meta .sep { margin: 0 8px; color: var(--line); }
 #centsGauge { width: 100%; max-width: 520px; height: auto; display: block; margin: 6px auto 0; }
@@ -394,3 +398,152 @@ main { padding: 26px clamp(16px, 4vw, 48px) 60px; max-width: 1280px; margin: 0 a
 .metric-table th { color: var(--amber); font-weight: 600; white-space: nowrap; }
 .metric-table td { color: #c3cad9; line-height: 1.6; }
 .metric-table tr:last-child td { border-bottom: none; }
+
+/* ============================================================
+   移动端适配
+   ============================================================ */
+
+/* 触控滚动更顺滑；隐藏滚动条避免挤压内容 */
+.tabs, .history-list, .k-seg-list {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar, .history-list::-webkit-scrollbar { display: none; }
+button, label, select, input { -webkit-tap-highlight-color: transparent; }
+
+/* 平板 / 窄屏 */
+@media (max-width: 900px) {
+  .site-header {
+    flex-direction: column; align-items: stretch; gap: 14px;
+    padding: 16px clamp(14px, 4vw, 32px) 14px;
+  }
+  .mic-control { text-align: left; }
+  .mic-hint { max-width: none; }
+  .tuner-grid, .spectrum-grid, .karaoke-grid { grid-template-columns: 1fr !important; }
+  .k-timeline-card, .k-report-card { grid-column: 1; }
+  .runner-stage { grid-template-columns: 1fr; }
+  .metrics-col { grid-template-columns: 1fr 1fr; }
+  .target-note { font-size: 38px; }
+  main { padding: 18px clamp(14px, 4vw, 32px) 48px; }
+  .card { padding: 16px; }
+}
+
+/* 手机 */
+@media (max-width: 640px) {
+  .brand-text h1 { font-size: 21px; }
+  .brand-text p { font-size: 12px; }
+  .brand-mark { font-size: 26px; }
+
+  .mic-control .btn { width: 100%; justify-content: center; padding: 13px 18px; font-size: 15px; }
+  .btn { padding: 12px 20px; }
+  .btn-ghost, .file-btn { padding: 12px 16px; }
+
+  .tabs { padding: 0 10px; gap: 2px; }
+  .tab { font-size: 13.5px; padding: 12px 12px 13px; }
+
+  main { padding: 14px 12px 44px; }
+  .card { padding: 14px; border-radius: 12px; }
+  .card h3 { font-size: 15px; }
+  .card-caption, .muted { font-size: 12px; }
+
+  .note-name { font-size: 56px; }
+  #centsGauge { width: 100%; height: auto; }
+  .cents-readout { font-size: 15px; }
+
+  canvas { max-width: 100% !important; }
+  #pitchCurve, #spectrumCanvas, #exerciseCurve, #centsGauge { width: 100% !important; height: auto !important; }
+  #karaokeCanvas { width: 100%; height: 210px; }
+
+  .metrics-col { grid-template-columns: 1fr !important; }
+  .metric-value { font-size: 19px; }
+
+  select, input[type="text"], input[type="file"] { font-size: 16px; }
+  .octave-setting select { padding: 10px 12px; }
+  .k-volume input[type="range"] { width: 100%; height: 28px; }
+  .k-check input[type="checkbox"] { width: 20px; height: 20px; }
+  .k-volume, .k-check { font-size: 13.5px; }
+  .k-controls { gap: 10px; }
+  .k-controls .btn { flex: 1 1 45%; }
+
+  .k-timeline-head { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .k-live-score { font-size: 26px; }
+  .k-seg { grid-template-columns: 58px 1fr auto; font-size: 12.5px; gap: 8px; }
+  .k-seg-btn { padding: 6px 12px; }
+  .k-report-score { font-size: 38px; }
+  .k-report-stats { gap: 10px 16px; font-size: 12.5px; }
+
+  .step-dots { gap: 6px; }
+  .step-dot { width: 24px; height: 24px; font-size: 10px; }
+  .fb-chip { font-size: 12px; padding: 6px 11px; }
+  .runner-summary .big-score { font-size: 34px; }
+
+  .lesson > h2 { font-size: 18px; }
+  .lesson .card { padding: 14px 15px; }
+  .lesson p, .lesson li { font-size: 14px; line-height: 1.7; }
+  .week { grid-template-columns: 1fr; gap: 4px; }
+  .week b { font-size: 13.5px; }
+
+  .metric-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .metric-table { min-width: 460px; }
+
+  .site-footer { padding: 18px 14px 40px; font-size: 12px; }
+  .toast { bottom: 18px; max-width: 92vw; font-size: 13.5px; padding: 11px 16px; }
+}
+
+/* 超窄屏（iPhone SE 等 320-360px） */
+@media (max-width: 380px) {
+  .tab { font-size: 12.5px; padding: 11px 9px 12px; }
+  .note-name { font-size: 46px; }
+  .k-controls .btn { flex: 1 1 100%; }
+  .k-report-stats { flex-direction: column; gap: 4px; }
+}
+
+/* 横屏矮屏：压缩留白，让画布尽量可见 */
+@media (max-height: 480px) and (orientation: landscape) {
+  .site-header { padding: 10px 16px; }
+  .brand-text p { display: none; }
+  main { padding: 10px 16px 28px; }
+  .tabs { position: sticky; top: 0; background: var(--bg); z-index: 20; }
+}
+
+/* 刘海屏安全区 */
+@supports (padding: max(0px)) {
+  .site-header {
+    padding-left: max(clamp(14px, 4vw, 32px), env(safe-area-inset-left));
+    padding-right: max(clamp(14px, 4vw, 32px), env(safe-area-inset-right));
+  }
+  main {
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+    padding-bottom: max(44px, env(safe-area-inset-bottom));
+  }
+  .site-footer { padding-bottom: max(40px, env(safe-area-inset-bottom)); }
+}
+
+/* 触屏：hover 效果换成按下反馈，避免"点了没反应"的错觉 */
+@media (hover: none) {
+  .exercise-card:hover { transform: none; }
+  .btn:hover { box-shadow: none; }
+  .file-btn:hover { border-color: var(--line); color: var(--text-dim); }
+  .file-btn.big:hover { border-color: var(--amber); color: var(--amber-soft); background: rgba(242, 163, 60, .08); }
+  .btn-primary:active { box-shadow: 0 4px 14px rgba(242, 163, 60, .4); }
+  .exercise-card:active { border-color: var(--teal-dim); }
+  .k-seg-btn:hover { border-color: var(--line); color: var(--text-dim); }
+}
+
+/* grid 项目默认 min-width:auto 会被内容撑破；统一允许收缩 */
+.tuner-grid > *, .spectrum-grid > *, .karaoke-grid > *,
+.metrics-col > *, .runner-stage > *, .week > * { min-width: 0; }
+/* 单列时用 minmax(0,1fr) 而不是 1fr，避免子元素固有宽度撑破列宽 */
+@media (max-width: 900px) {
+  .tuner-grid, .spectrum-grid, .karaoke-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .runner-stage { grid-template-columns: minmax(0, 1fr); }
+  .metrics-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .metrics-col { grid-template-columns: minmax(0, 1fr) !important; }
+  .week { grid-template-columns: minmax(0, 1fr); }
+  /* 画布与长数字不得撑破卡片 */
+  .card { overflow-wrap: anywhere; }
+  #centsGauge, #pitchCurve, #spectrumCanvas, #exerciseCurve, #karaokeCanvas { max-width: 100% !important; }
+}
