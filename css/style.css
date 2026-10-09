@@ -40,6 +40,13 @@ a { color: var(--teal); }
 .brand-text h1 > span:last-child { font-size: 13px; color: var(--text-dim); font-weight: 400; letter-spacing: .2px; }
 .brand-divider { color: var(--line); font-size: 19px; font-weight: 400; }
 .privacy-badge { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--muted); }
+/* 页头右上是全局工具区：隐私说明、安装入口、语言切换。 */
+.header-tools { position: relative; display: flex; align-items: center; gap: 14px; }
+.lang-picker { display: flex; align-items: center; }
+.lang-picker select { min-height: 34px; padding: 6px 28px 6px 11px; border-radius: 999px; font-size: 12px; }
+.btn-install { min-height: 34px; padding: 6px 13px; border-radius: 999px; background: transparent; color: var(--text-dim); }
+.btn-install:hover { color: var(--teal); border-color: var(--teal); }
+.install-hint { position: absolute; top: calc(100% + 10px); right: 0; z-index: 60; width: min(300px, 78vw); padding: 10px 13px; border: 1px solid #45584e; border-radius: 9px; background: #25372c; color: var(--text); font-size: 11px; line-height: 1.65; box-shadow: 0 6px 30px #0005; }
 .tabs { display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tab { display: flex; align-items: center; justify-content: center; gap: 8px; position: relative; flex-shrink: 0; background: none; border: none; padding: 10px 20px 13px; font-size: 13px; color: var(--text-dim); font-weight: 500; }
@@ -283,12 +290,21 @@ meter::-moz-meter-bar { background: var(--teal); }
   .brand-text h1 { font-size: 17px; }
   .brand-mark { width: 31px; height: 31px; border-radius: 8px; }
   .privacy-badge { font-size: 9px; gap: 5px; }
-  .tabs { gap: 0; }
+  /* 窄屏只保留语言切换；隐私说明由下方状态行承担同一信息。 */
+  .header-tools { gap: 10px; }
+  .header-tools .privacy-badge { display: none; }
+  .lang-picker select { width: auto; min-height: 34px; padding: 6px 22px 6px 10px; font-size: 12px; }
+  .btn-install { padding: 6px 9px; }
+  .btn-install span { display: none; }
+  /* 五个标签在窄屏放不下：隐藏滚动条时用右侧渐隐提示还能横向滑动。 */
+  .tabs { gap: 0; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 26px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 26px), transparent); }
   .tab, .tab:first-child { font-size: 12px; padding: 11px 12px 13px; gap: 6px; }
   .tab svg { width: 15px; height: 15px; }
   .settings-bar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding-top: 14px; }
-  .settings-fields { display: grid; grid-template-columns: 1.3fr 1fr; gap: 10px; }
-  .setting-field { flex-direction: column; align-items: stretch; gap: 5px; font-size: 10px; }
+  .settings-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  /* 语言已移到页头，设置区只剩音名基准，横排比竖排省一行高度。 */
+  .setting-field { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; font-size: 11px; }
+  .setting-field select { width: auto; }
   select { font-size: 13px; min-height: 38px; padding-right: 18px; width: 100%; }
   .mic-control .btn { width: 100%; min-height: 40px; }
   .session-status { font-size: 10px; padding-top: 8px; padding-bottom: 6px; }
@@ -365,5 +381,6 @@ meter::-moz-meter-bar { background: var(--teal); }
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 @supports (padding: max(0px)) {
-  .app-shell { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+  /* 独立窗口（添加到主屏幕）时状态栏是半透明的，留出顶部安全区。 */
+  .app-shell { padding-top: env(safe-area-inset-top); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
 }

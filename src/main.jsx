@@ -3,11 +3,15 @@ import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import App from './App.jsx';
 import { initI18n } from '../js/i18n.js';
+import { registerServiceWorker } from './pwa.js';
 import '../css/style.css';
 
 initI18n();
 const root = createRoot(document.getElementById('root'));
 flushSync(() => root.render(<App />));
+
+// 安装为本地应用：注册构建产物里的 Service Worker（开发模式自动跳过）。
+registerServiceWorker();
 
 // 视图先挂载，现有音频与训练控制器随后绑定；保持分析内核独立。
 import('../js/app.js').catch(error => {

@@ -1,0 +1,42 @@
+{
+  "id": "./",
+  "name": "MusicMaster · 歌声练功房",
+  "short_name": "MusicMaster",
+  "description": "浏览器端唱歌基本功训练：实时音高分析、跟唱评分、共鸣频谱与入门课程。音频仅在本机处理。",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "any",
+  "background_color": "#101315",
+  "theme_color": "#101315",
+  "categories": [
+    "music",
+    "education",
+    "utilities"
+  ],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

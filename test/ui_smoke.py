@@ -227,6 +227,112 @@ def upload_controls(page):
     check("所有常用设置在帮助折叠区之外", not hidden_settings, hidden_settings)
 
 
+# 用合成事件验证安装入口：Chromium 是否真的触发 beforeinstallprompt 取决于环境，
+# 但页面拿到事件后的行为必须确定可测。
+SIMULATE_INSTALL = """() => {
+  const event = new Event('beforeinstallprompt');
+  event.prompt = () => { window.__installPrompted = true; };
+  event.userChoice = Promise.resolve({ outcome: 'accepted', platform: 'web' });
+  window.dispatchEvent(event);
+}"""
+
+
+def header_and_install(browser):
+    """语言切换必须是页头右上角的全局控件，且安装入口能真正调用系统安装。"""
+    context = browser.new_context(viewport={"width": 1280, "height": 900}, locale="zh-CN")
+    page = context.new_page()
+    errors = watch_errors(page)
+    try:
+        ready(page)
+        placement = page.evaluate("""() => {
+          const select = document.getElementById('langSelect');
+          const rect = select.getBoundingClientRect();
+          const bar = document.querySelector('.settings-bar').getBoundingClientRect();
+          return {count: document.querySelectorAll('#langSelect').length,
+            inHeader: !!select.closest('.site-header'), inPanel: !!select.closest('.tab-panel'),
+            right: rect.right, top: rect.top, height: rect.height, width: innerWidth,
+            aboveSettings: rect.bottom <= bar.top + 1};
+        }""")
+        check("语言切换是页头右上角的唯一入口",
+              placement["count"] == 1 and placement["inHeader"] and not placement["inPanel"]
+              and placement["aboveSettings"] and placement["right"] > placement["width"] * .8
+              and placement["height"] >= 32, placement)
+        leaked = []
+        for tab in TABS:
+            select_tab(page, tab)
+            if page.evaluate("() => !!document.querySelector('.tab-panel.active #langSelect')"):
+                leaked.append(tab)
+        check("各子页面内不再重复语言切换", not leaked, leaked)
+        select_tab(page, "tuner")
+        page.evaluate(SIMULATE_INSTALL)
+        page.wait_for_selector("#installBtn")
+        button = page.evaluate("""() => { const el = document.getElementById('installBtn'), rect = el.getBoundingClientRect();
+          return {visible: rect.width > 0 && rect.height >= 32, text: el.textContent.trim()}; }""")
+        check("浏览器可安装时页头出现安装入口", button["visible"] and button["text"], button)
+        page.click("#installBtn")
+        page.wait_for_function("() => !!window.__installPrompted")
+        check("点击安装入口触发系统安装并收起入口",
+              page.evaluate("() => !document.getElementById('installBtn')"))
+        check("页头语言与安装流程无 JS/资源错误", not errors, errors)
+    finally:
+        context.close()
+
+
+def pwa_installable(browser):
+    """成品必须能安装成本地应用：manifest、图标、Service Worker 与离线启动。"""
+    context = browser.new_context(viewport={"width": 1280, "height": 900}, locale="zh-CN")
+    page = context.new_page()
+    errors = watch_errors(page)
+    try:
+        ready(page)
+        manifest = page.evaluate("async () => (await fetch(document.querySelector('link[rel=manifest]').href)).json()")
+        icons = manifest.get("icons", [])
+        check("manifest 为独立窗口且图标齐全",
+              manifest.get("display") == "standalone" and manifest.get("start_url") == "./"
+              and any(icon.get("sizes") == "192x192" for icon in icons)
+              and any(icon.get("sizes") == "512x512" for icon in icons)
+              and any("maskable" in (icon.get("purpose") or "") for icon in icons), manifest)
+        assets = page.evaluate("""async () => {
+          const paths = ['icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'];
+          const out = {};
+          for (const path of paths) {
+            const response = await fetch(new URL(path, document.baseURI));
+            // 必须读完响应体，否则中断的下载会被记成 requestfailed。
+            const body = await response.arrayBuffer();
+            out[path] = [response.status, response.headers.get('content-type'), body.byteLength];
+          }
+          out.apple = !!document.querySelector('link[rel=apple-touch-icon]');
+          return out;
+        }""")
+        check("应用图标都可访问且为 PNG",
+              assets.pop("apple") and all(status == 200 and "png" in (kind or "") and size > 500
+                                          for status, kind, size in assets.values()), assets)
+        # 开发服务器的产物不含 Service Worker，离线验证针对 npm run preview / Pages。
+        built = page.evaluate("() => !document.querySelector('script[src*=\"@vite/client\"]')")
+        if not built:
+            print("SKIP Service Worker 离线验证：当前是开发服务器，请对 npm run preview 或线上成品运行", flush=True)
+            return
+        state = page.evaluate("""async () => { const registration = await navigator.serviceWorker.ready;
+          return {scope: registration.scope, state: registration.active && registration.active.state}; }""")
+        check("Service Worker 注册并激活", state["state"] == "activated", state)
+        page.reload(wait_until="networkidle")
+        page.wait_for_function("() => !!navigator.serviceWorker.controller")
+        check("已构建产物的缓存包含应用资源", page.evaluate("async () => (await caches.keys()).some(key => key.startsWith('musicmaster-'))"))
+        online_errors = list(errors)
+        context.set_offline(True)
+        page.reload(wait_until="domcontentloaded")
+        page.wait_for_function("() => !!window.__mm", timeout=20000)
+        offline = page.evaluate("""() => ({panels: document.querySelectorAll('.tab-panel').length,
+          tabs: document.querySelectorAll('[role=tab]').length, heading: document.querySelector('.panel-heading h2')?.textContent,
+          language: document.getElementById('langSelect')?.value, mic: !!document.getElementById('micBtn')})""")
+        check("断网后仍能打开完整应用", offline["panels"] == 5 and offline["tabs"] == 5
+              and offline["mic"] and offline["language"] == "zh" and bool(offline["heading"]), offline)
+        context.set_offline(False)
+        check("PWA 在线阶段无 JS/资源错误", not online_errors, online_errors)
+    finally:
+        context.close()
+
+
 def desktop_functional(browser):
     context = browser.new_context(viewport={"width": 1280, "height": 900}, locale="zh-CN", permissions=["microphone"])
     context.add_init_script(CANVAS_PROBE)
@@ -282,6 +388,8 @@ def desktop_functional(browser):
               return {frames: ref.midis.length, voiced: voiced.length, avg: voiced.reduce((a,b) => a+b, 0)/(voiced.length || 1)};
             }""")
             check("合成 8秒 WAV 经 Worker 提取 A4 参考线", reference["frames"] > 100 and reference["voiced"] > 100 and abs(reference["avg"] - 69) < .15, reference)
+            # fileReady 早于播放器加载完成；等界面真正显示出文件名，再断言语言切换保留状态。
+            page.wait_for_function("() => document.getElementById('karaokeFileInfo').textContent.includes('ui-tone-a4.wav')", timeout=15000)
             page.evaluate("() => { const k = window.__mm.state.karaoke; window.__uiLoaded = {ref: k.ref, player: k.player}; }")
             for language in ["en", "zh"]:
                 page.select_option("#langSelect", language)
@@ -450,9 +558,11 @@ def main():
         browser = playwright.chromium.launch(**launch)
         try:
             run_case("桌面音频与键盘流程", lambda: desktop_functional(browser))
+            run_case("页头语言与安装入口", lambda: header_and_install(browser))
             for name, width, height, mobile in VIEWPORTS:
                 run_case(name + " 响应式双语流程", lambda name=name, width=width, height=height, mobile=mobile: responsive(browser, name, width, height, mobile))
             run_case("真实权限拒绝与恢复", lambda: permission_recovery(browser))
+            run_case("PWA 安装与离线启动", lambda: pwa_installable(browser))
         finally:
             browser.close()
     print(f"UI {'OK' if failed == 0 else 'FAILED'} ({passed} pass, {failed} fail)", flush=True)

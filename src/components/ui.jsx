@@ -14,6 +14,7 @@ const paths = {
   sliders: <><path d="M4 21v-7m0-6V3m8 18v-5m0-6V3m8 18V10m0-6V3M1 8h6m2 8h6m2-12h6" /></>,
   shield: <><path d="m12 2 9 4v6c0 5-9 10-9 10S3 17 3 12V6l9-4Z" /><path d="m8 12 3 3 5-6" /></>,
   arrow: <><path d="M7 17 17 7M7 7h10v10" /></>,
+  download: <><path d="M12 3v11m0 0 4-4m-4 4-4-4" /><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" /></>,
 };
 
 export function Icon({ name, size = 18, ...props }) {

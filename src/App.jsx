@@ -2,6 +2,7 @@ import React, { memo, useEffect, useState } from 'react';
 import { Text, Icon } from './components/ui.jsx';
 import { TunerPanel } from './components/TunerPanel.jsx';
 import { PracticePanel, KaraokePanel, SpectrumPanel, LearnPanel } from './components/FeaturePanels.jsx';
+import { useInstallPrompt } from './pwa.js';
 
 const tabs = [
   { id: 'tuner', label: 'tab.tuner', icon: 'mic' },
@@ -38,12 +39,32 @@ function Navigation() {
   </nav>;
 }
 
+// 语言切换和安装入口属于全局外壳，固定在页头右上角，不随子页面变化。
+const HeaderTools = memo(function HeaderTools() {
+  const install = useInstallPrompt();
+  const [hint, setHint] = useState(false);
+  async function onInstall() {
+    const accepted = await install.start();
+    if (!accepted && install.manual) setHint(true);
+  }
+  return <div className="header-tools">
+    <div className="privacy-badge"><Icon name="shield" size={15} /><Text k="ui.localAudio" /></div>
+    {install.visible && <button type="button" className="btn btn-install" id="installBtn" data-i18n-attr="title:ui.installTitle,aria-label:ui.installApp" title="Install as an app" aria-label="Install app" onClick={onInstall}><Icon name="download" size={15} /><Text k="ui.installApp" /></button>}
+    <label className="lang-picker" data-i18n-attr="title:ui.language" title="Language / 语言">
+      <select id="langSelect" aria-label="Language / 语言">
+        <option value="zh">中文</option>
+        <option value="en">English</option>
+      </select>
+    </label>
+    {hint && <p className="install-hint" role="status"><Text k="ui.installIos" /></p>}
+  </div>;
+});
+
 const SettingsBar = memo(function SettingsBar() {
   return <div className="settings-bar">
     <div className="settings-fields">
       <span className="settings-symbol"><Icon name="sliders" size={17} /></span>
       <label className="setting-field"><Text k="ui.octaveLabel" /><select id="octaveBase" data-i18n-attr="aria-label:octave.label"><Text as="option" value="0" k="ui.octaveC4" /><Text as="option" value="1" k="ui.octaveC3" /></select></label>
-      <label className="setting-field lang-picker"><Text k="ui.language" /><select id="langSelect" aria-label="Language / 语言"><option value="zh">中文</option><option value="en">English</option></select></label>
     </div>
     <div className="mic-control"><button id="micBtn" className="btn btn-primary"><span className="mic-dot" id="micDot" /><span id="micBtnText">启用麦克风</span></button></div>
   </div>;
@@ -57,7 +78,7 @@ const Workspace = memo(function Workspace() {
 export default function App() {
   return <div className="app-shell">
     <a className="skip-link" href="#workspace"><Text k="ui.skip" /></a>
-    <header className="site-header"><div className="brand"><span className="brand-mark"><Icon name="wave" size={23} /></span><div className="brand-text"><h1>MusicMaster<span className="brand-divider">/</span><Text k="ui.studio" /></h1></div></div><div className="privacy-badge"><Icon name="shield" size={15} /><Text k="ui.localAudio" /></div></header>
+    <header className="site-header"><div className="brand"><span className="brand-mark"><Icon name="wave" size={23} /></span><div className="brand-text"><h1>MusicMaster<span className="brand-divider">/</span><Text k="ui.studio" /></h1></div></div><HeaderTools /></header>
     <Navigation />
     <SettingsBar />
     <div className="session-status"><span className="status-dot" id="sessionDot" /><p className="mic-hint" id="micHint">所有分析都在你的浏览器本地完成，录音不会上传</p></div>
