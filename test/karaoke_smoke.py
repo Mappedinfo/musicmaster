@@ -110,9 +110,14 @@ with sync_playwright() as p:
     page.click("#karaokePlayBtn")
     page.wait_for_timeout(2000)
     check("播放按钮变为暂停", "暂停" in page.inner_text("#karaokePlayBtn"), page.inner_text("#karaokePlayBtn"))
+    check("K歌实际启动麦克风采集", page.evaluate("() => window.__mm.state.karaoke.player.micOn"))
 
     page.evaluate("""() => {
       const k = window.__mm.state.karaoke;
+      // 真实采集链路已验证；隔离虚拟麦克风的静音帧，单独检查满分报告。
+      k.player.pause();
+      k.player.stopMicrophone();
+      k.scorer = new k.scorer.constructor({ ref: k.ref, lyrics: k.lyrics });
       // 模拟"完全唱准"：把参考线的音高当作麦克风输入喂进去
       for (let i = 0; i < k.ref.times.length; i++) {
         const t = k.ref.times[i];

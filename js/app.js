@@ -14,6 +14,14 @@ import { buildReferenceFromPair } from './karaoke.js';
 
 const $ = (sel) => document.querySelector(sel);
 
+// 实时状态保存翻译键，切换语言时保留当前文件、采集与练习状态。
+function liveText(selector, key, vars) {
+  const el = typeof selector === 'string' ? $(selector) : selector;
+  el.dataset.liveKey = key;
+  el._translationVars = vars;
+  el.textContent = t(key, vars);
+}
+
 const engine = new AudioEngine();
 const player = new TonePlayer();
 
@@ -61,12 +69,21 @@ function initLang() {
   if (meta) meta.setAttribute('content', t('app.description'));
   // 语言变化后，动态渲染的内容需要重建
   onLangChange(() => {
+    document.querySelectorAll('[data-live-key]').forEach(el => {
+      el.textContent = t(el.dataset.liveKey, el._translationVars);
+    });
+    document.title = t('app.title');
+    if (meta) meta.setAttribute('content', t('app.description'));
+    $('#micBtnText').textContent = t(state.micOn ? 'mic.stop' : 'mic.enable');
+    $('#micHint').textContent = t(state.micOn ? 'mic.listening' : 'mic.privacy');
     if (state.karaoke.report) renderKaraokeReport(state.karaoke.report);
     renderKeyOptions();
     renderLearn();
     buildExerciseCards();
     renderHistory();
     setKaraokePlayLabel(state.karaoke.player ? state.karaoke.player.playing : false);
+    if (!state.range.active && state.range.midis.length >= 10) showRangeResult();
+    updateKaraokeStatus();
   });
 }
 
@@ -132,14 +149,6 @@ function toast(msg, ms = 3400) {
   toastTimer = setTimeout(() => { el.hidden = true; }, ms);
 }
 
-// ---------- 选项卡 ----------
-document.querySelectorAll('.tab').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b === btn));
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + btn.dataset.tab));
-  });
-});
-
 // ---------- 麦克风开关 ----------
 const micBtn = $('#micBtn');
 micBtn.addEventListener('click', async () => {
@@ -156,10 +165,12 @@ micBtn.addEventListener('click', async () => {
     state.micOn = true;
     state.trailStart = performance.now();
     micBtn.classList.add('listening');
+    $('.session-status').classList.add('listening');
     $('#micBtnText').textContent = t('mic.stop');
     $('#micHint').textContent = t('mic.listening');
     toast(t('toast.micOn'));
   } catch (err) {
+    engine.stop();
     console.error(err);
     let msg = t('micErr.generic');
     if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
@@ -182,21 +193,30 @@ function stopMic() {
     state.karaoke.player.pause();
     setKaraokePlayLabel(false);
   }
-  if (state.karaoke.player) {
-    state.karaoke.player.stop();
-    state.karaoke.player = null;
-    state.karaoke.fileReady = false;
-    state.karaoke.ref = null;
-    state.karaoke.scorer = null;
-    $('#karaokeFileInfo').textContent = t('k.disconnected');
-  }
+  if (state.karaoke.player) state.karaoke.player.stopMicrophone();
+  state.karaoke.live = null;
+  state.karaoke.lastEval = null;
   engine.stop();
   state.micOn = false;
   micBtn.classList.remove('listening');
+  $('.session-status').classList.remove('listening');
   $('#micBtnText').textContent = t('mic.enable');
   $('#micHint').textContent = t('mic.privacy');
   $('#tunerNote').textContent = '--';
   $('#tunerFreq').textContent = '0.0 Hz';
+  $('#tunerSolfege').textContent = '';
+  $('#tunerCents').textContent = '0';
+  $('#clarityFill').style.width = '0%';
+  $('#pitchEmpty').hidden = false;
+  $('#spectrumEmpty').hidden = false;
+  $('#karaokeLevel').value = 0;
+  $('#karaokeMine').textContent = '--';
+  if (state.range.active) {
+    state.range.active = false;
+    liveText('#rangeStartBtn', 'range.start');
+    showRangeResult();
+  }
+  drawGauge(0, false);
 }
 
 // ---------- 实时帧处理 ----------
@@ -229,6 +249,7 @@ function onFrame(f) {
 }
 
 function updateTuner(f, midi) {
+  $('#pitchEmpty').hidden = state.micOn;
   const noteEl = $('#tunerNote');
   if (midi != null && f.clarity > 0.5) {
     // 音名显示走 noteText（可校准八度），cents 仍需原始 MIDI 参与计算
@@ -283,10 +304,10 @@ function drawGauge(cents, active) {
     ctx.beginPath();
     ctx.moveTo(cx + Math.cos(ang) * inner, cy + Math.sin(ang) * inner);
     ctx.lineTo(cx + Math.cos(ang) * (R - 18), cy + Math.sin(ang) * (R - 18));
-    ctx.strokeStyle = '#3a4155';
+    ctx.strokeStyle = '#42534c';
     ctx.stroke();
     if (c % 25 === 0) {
-      ctx.fillStyle = '#6b7487';
+      ctx.fillStyle = '#859590';
       ctx.fillText(String(c), cx + Math.cos(ang) * (R - 44), cy + Math.sin(ang) * (R - 44) + 4);
     }
   }
@@ -296,7 +317,7 @@ function drawGauge(cents, active) {
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.lineTo(cx + Math.cos(ang) * (R - 30), cy + Math.sin(ang) * (R - 30));
-    ctx.strokeStyle = Math.abs(cents) <= 15 ? '#38d9c0' : '#f2a33c';
+    ctx.strokeStyle = Math.abs(cents) <= 15 ? '#5be0b3' : '#e5bc76';
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
     ctx.stroke();
@@ -304,12 +325,11 @@ function drawGauge(cents, active) {
   }
   ctx.beginPath();
   ctx.arc(cx, cy, 6, 0, 2 * Math.PI);
-  ctx.fillStyle = active ? '#e9ecf3' : '#3a4155';
+  ctx.fillStyle = active ? '#e9ecf3' : '#42534c';
   ctx.fill();
 }
 
 // ---------- 音高曲线（音准仪） ----------
-const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 function drawPitchCurve() {
   const cv = $('#pitchCurve');
   if (!cv.offsetParent && !$('#tab-tuner').classList.contains('active')) return;
@@ -337,8 +357,8 @@ function drawPitchCurve() {
     const isC = ((m % 12) + 12) % 12 === 0;
     ctx.strokeStyle = isC ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.05)';
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-    ctx.fillStyle = '#566078';
-    ctx.fillText(NOTE_NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1), 4, y - 2);
+    ctx.fillStyle = '#859590';
+    ctx.fillText(noteText(m), 4, y - 2);
   }
   // 轨迹
   let prev = null;
@@ -352,7 +372,7 @@ function drawPitchCurve() {
       ctx.beginPath();
       ctx.moveTo(prev.x, prev.y);
       ctx.lineTo(x, y);
-      ctx.strokeStyle = '#f2a33c';
+      ctx.strokeStyle = '#5be0b3';
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.lineWidth = 1;
@@ -416,7 +436,7 @@ function selectExercise(ex, cardEl) {
   $('#runnerSummary').hidden = true;
   $('#stepDots').innerHTML = '';
   $('#runnerTarget').textContent = '--';
-  $('#runnerPhase').textContent = t('practice.ready');
+  liveText('#runnerPhase', 'practice.ready');
   $('#runnerPhase').className = 'target-label';
   $('#runnerLiveCents').textContent = '';
   rc.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -450,7 +470,7 @@ async function startExercise(ex) {
       state.exTarget = ev.midi;
       state.exTrail = [];
       dots.children[ev.index].className = 'step-dot playing';
-      $('#runnerPhase').textContent = t('practice.listen');
+      liveText('#runnerPhase', 'practice.listen');
       $('#runnerPhase').className = 'target-label';
       $('#runnerTarget').textContent = noteText(ev.midi);
       $('#runnerLiveCents').textContent = '';
@@ -458,7 +478,7 @@ async function startExercise(ex) {
       state.exTarget = ev.midi;
       state.exTrail = [];
       dots.children[ev.index].className = 'step-dot singing';
-      $('#runnerPhase').textContent = t('practice.sing');
+      liveText('#runnerPhase', 'practice.sing');
       $('#runnerPhase').className = 'target-label sing';
     } else if (ev.type === 'step-score') {
       const r = ev.result;
@@ -477,7 +497,7 @@ async function startExercise(ex) {
         fb.appendChild(chip);
       }
       state.exTarget = null;
-      $('#runnerPhase').textContent = t('practice.ready');
+      liveText('#runnerPhase', 'practice.ready');
       $('#runnerPhase').className = 'target-label';
     } else if (ev.type === 'done') {
       state.runner = null;
@@ -492,7 +512,7 @@ async function startExercise(ex) {
       saveSession({ exercise: ex.id, name: ex.name, avgScore: s.avgScore, steps: s.steps, sung: s.sung });
       renderHistory();
       buildExerciseCards();
-      $('#runnerPhase').textContent = t('practice.done');
+      liveText('#runnerPhase', 'practice.done');
       $('#runnerTarget').textContent = '🎉';
       $('#runnerLiveCents').textContent = '';
     }
@@ -511,7 +531,7 @@ $('#stopExerciseBtn').addEventListener('click', () => stopExercise());
 function stopExercise() {
   if (state.runner) { state.runner.cancel(); state.runner = null; }
   state.exTarget = null;
-  $('#runnerPhase').textContent = t('practice.stopped');
+  liveText('#runnerPhase', 'practice.stopped');
   $('#runnerPhase').className = 'target-label';
   $('#runnerLiveCents').textContent = '';
   const fb = $('#runnerFeedback');
@@ -529,7 +549,7 @@ function drawExerciseCurve() {
   const W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
   if (state.exTarget == null) {
-    ctx.fillStyle = '#566078';
+    ctx.fillStyle = '#859590';
     ctx.font = '13px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('目标音出现时，这里会显示你的音高与目标的对比', W / 2, H / 2);
@@ -550,7 +570,7 @@ function drawExerciseCurve() {
   ctx.setLineDash([8, 6]);
   ctx.beginPath(); ctx.moveTo(0, ty); ctx.lineTo(W, ty); ctx.stroke();
   ctx.setLineDash([]);
-  ctx.fillStyle = '#38d9c0';
+  ctx.fillStyle = '#5be0b3';
   ctx.font = '12px ui-monospace, monospace';
   ctx.textAlign = 'left';
   ctx.fillText('目标 ' + noteText(target), 6, ty - 6);
@@ -567,7 +587,7 @@ function drawExerciseCurve() {
     const y = Math.max(2, Math.min(H - 2, yOf(p.midi)));
     if (prev) {
       const devCents = Math.abs((p.midi - target) * 100);
-      ctx.strokeStyle = devCents <= 25 ? '#38d9c0' : (devCents <= 60 ? '#f2a33c' : '#f2675e');
+      ctx.strokeStyle = devCents <= 25 ? '#5be0b3' : (devCents <= 60 ? '#e5bc76' : '#f18b82');
       ctx.lineWidth = 2.5;
       ctx.beginPath(); ctx.moveTo(prev.x, prev.y); ctx.lineTo(x, y); ctx.stroke();
       ctx.lineWidth = 1;
@@ -587,23 +607,24 @@ function drawExerciseCurve() {
 
 // ---------- 音域测试 ----------
 $('#rangeStartBtn').addEventListener('click', () => {
-  if (!state.micOn) { toast('请先启用麦克风'); return; }
+  if (!state.micOn) { toast(t('toast.needMic')); return; }
   state.range.active = !state.range.active;
-  $('#rangeStartBtn').textContent = state.range.active ? t('range.stop') : t('range.start');
+  if (state.range.active) liveText('#rangeStartBtn', 'range.stop');
+  else liveText('#rangeStartBtn', 'range.start');
   if (state.range.active) {
     state.range.midis = [];
-    $('#rangeResult').textContent = t('range.recording');
+    liveText('#rangeResult', 'range.recording');
   } else {
     showRangeResult();
   }
 });
 $('#rangeResetBtn').addEventListener('click', () => {
   state.range.midis = [];
-  $('#rangeResult').textContent = t('range.empty');
+  liveText('#rangeResult', 'range.empty');
 });
 function showRangeResult() {
   const ms = state.range.midis;
-  if (ms.length < 10) { $('#rangeResult').textContent = t('range.tooFew'); return; }
+  if (ms.length < 10) { liveText('#rangeResult', 'range.tooFew'); return; }
   ms.sort((a, b) => a - b);
   const lo = ms[Math.floor(ms.length * 0.02)];
   const hi = ms[Math.min(ms.length - 1, Math.floor(ms.length * 0.98))];
@@ -620,6 +641,7 @@ function drawSpectrum() {
   const W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
   const s = state.spectrum;
+  $('#spectrumEmpty').hidden = !!s && state.micOn;
   if (!s) return;
 
   const fMin = 50, fMax = 8000;
@@ -634,7 +656,7 @@ function drawSpectrum() {
     const x = xOf(f);
     ctx.strokeStyle = 'rgba(255,255,255,.07)';
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-    ctx.fillStyle = '#566078';
+    ctx.fillStyle = '#859590';
     ctx.fillText(f >= 1000 ? (f / 1000) + 'k' : String(f), x, H - 4);
   });
 
@@ -660,13 +682,13 @@ function drawSpectrum() {
   const f = state.lastFrame;
   if (f && f.voiced && f.frequency > 0) {
     const x = xOf(f.frequency);
-    ctx.strokeStyle = '#f2a33c';
+    ctx.strokeStyle = '#e5bc76';
     ctx.setLineDash([4, 4]);
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = '#f2a33c';
+    ctx.fillStyle = '#e5bc76';
     ctx.textAlign = 'left';
-    ctx.fillText('基频 ' + f.frequency.toFixed(0) + ' Hz', Math.min(x + 6, W - 110), 14);
+    ctx.fillText(canvasText('spectrum.fundamental') + ' ' + f.frequency.toFixed(0) + ' Hz', Math.min(x + 6, W - 110), 14);
   }
 
   // 指标
@@ -746,6 +768,18 @@ const KARAOKE = state.karaoke;
 const K_WINDOW = 10.5;   // 瀑布图向前显示多少秒
 const K_PAST = 5;        // 播放头左侧保留多少秒
 
+async function prepareKaraokeMic() {
+  if (!state.micOn) { toast(t('k.toastNeedMic')); return false; }
+  try {
+    await KARAOKE.player.startMic($('#karaokeEcho').checked);
+    return true;
+  } catch (err) {
+    KARAOKE.player.stopMicrophone();
+    toast(t(err.name === 'NotAllowedError' ? 'micErr.denied' : 'micErr.generic'), 5200);
+    return false;
+  }
+}
+
 function initKaraoke() {
   KARAOKE.active = true;
   const k = KARAOKE;
@@ -753,6 +787,20 @@ function initKaraoke() {
   // 手机上默认勾选"外放模式"，减少伴奏被麦克风再收进去
   const echoBox = $('#karaokeEcho');
   if (echoBox && isMobileLike()) echoBox.checked = true;
+  echoBox.addEventListener('change', async () => {
+    const enabled = echoBox.checked;
+    const tracks = [engine.stream, k.player?.micStream].filter(Boolean).flatMap(stream => stream.getAudioTracks());
+    echoBox.disabled = true;
+    try {
+      await Promise.all(tracks.map(track => track.applyConstraints({ echoCancellation: enabled, noiseSuppression: enabled, autoGainControl: false })));
+    } catch (err) {
+      echoBox.checked = !enabled;
+      await Promise.allSettled(tracks.map(track => track.applyConstraints({ echoCancellation: !enabled, noiseSuppression: !enabled, autoGainControl: false })));
+      toast(t('k.echoFailed'));
+    } finally {
+      echoBox.disabled = false;
+    }
+  });
 
   const player = new KaraokePlayer({
     onTime: (t, dur) => { k.time = t; k.duration = dur; },
@@ -787,7 +835,7 @@ function initKaraoke() {
     if (file) {
       const text = await file.text();
       k.lyrics = parseLRC(text);
-      $('#karaokeFileInfo').textContent = t('k.lrcLoaded', { n: k.lyrics.length, name: k.songName });
+      liveText('#karaokeFileInfo', 'k.lrcLoaded', { n: k.lyrics.length, name: k.songName });
       toast(t('k.toastLrc', { n: k.lyrics.length }));
     }
     lrcInput.value = '';
@@ -800,7 +848,7 @@ function initKaraoke() {
       if (f) {
         k.accFile = f;
         const el = $('#karaokePairInfo');
-        if (el) { el.textContent = t('k.pairSel', { name: f.name }); el.className = 'muted k-pair-status warn'; }
+        if (el) { liveText(el, 'k.pairSel', { name: f.name }); el.className = 'muted k-pair-status warn'; }
         // 已经有主文件时，立刻重新按精准模式分析
         if (k.songFile) await loadKaraokeFile(k.songFile);
       }
@@ -816,6 +864,7 @@ function initKaraoke() {
       setKaraokePlayLabel(false);
       return;
     }
+    if (!await prepareKaraokeMic()) return;
     $('#karaokeReport').hidden = true;
     k.scorer = new KaraokeScorer({ ref: k.ref, lyrics: k.lyrics });
     player.restart();
@@ -823,13 +872,14 @@ function initKaraoke() {
     if (okPlay) {
       setKaraokePlayLabel(true);
       $('#karaokeHint').classList.add('live');
-      $('#karaokeHint').textContent = t('k.hintLive');
+      liveText('#karaokeHint', 'k.hintLive');
     }
   });
 
   $('#karaokeRestartBtn').addEventListener('click', async () => {
     if (!k.fileReady) { toast(t('k.toastNeedSong')); return; }
     if (!state.micOn) { toast(t('k.toastNeedMic')); return; }
+    if (!await prepareKaraokeMic()) return;
     k.scorer = new KaraokeScorer({ ref: k.ref, lyrics: k.lyrics });
     k.lastEval = null;
     $('#karaokeReport').hidden = true;
@@ -872,7 +922,7 @@ async function loadKaraokeFile(file) {
       const cov = Math.round((pair.melody.coverage || 0) * 100);
       const pairEl = $('#karaokePairInfo');
       if (pairEl) {
-        pairEl.textContent = t('k.pairOk', { ms: ms, g: pair.gain.toFixed(2), snr: snr, cov: cov });
+        liveText(pairEl, 'k.pairOk', { ms: ms, g: pair.gain.toFixed(2), snr: snr, cov: cov });
         pairEl.className = 'muted k-pair-status ok';
       }
       if (pair.quality.snrProxyDb < 3) {
@@ -902,7 +952,7 @@ async function loadKaraokeFile(file) {
     const dur = k.player.duration || (res.times.length ? res.times[res.times.length - 1] : 0);
     // 精准模式下播放伴奏（让你跟着伴奏唱），单文件模式播放该文件本身
     await k.player.load(k.pairUsed && k.accFile ? k.accFile : file);
-    info.textContent = t('k.ready', { name: file.name, dur: formatTime(dur), sec: (voiced * res.hopSec).toFixed(0) }) + (k.pairUsed ? ' ' + t('k.pairTag') : '');
+    liveText(info, 'k.ready', { name: file.name, dur: formatTime(dur), sec: (voiced * res.hopSec).toFixed(0) });
 
     show(1, t('k.donePct'));
     setTimeout(() => { loading.hidden = true; }, 500);
@@ -912,10 +962,10 @@ async function loadKaraokeFile(file) {
     loading.hidden = true;
     if (KARAOKE.accFile) {
       const pe = $('#karaokePairInfo');
-      if (pe) { pe.textContent = t('k.pairFail', { msg: (err && err.message) ? err.message : 'error' }); pe.className = 'muted k-pair-status warn'; }
+      if (pe) { liveText(pe, 'k.pairFail', { msg: (err && err.message) ? err.message : 'error' }); pe.className = 'muted k-pair-status warn'; }
       KARAOKE.accFile = null;
     }
-    info.textContent = t('k.loadFail', { msg: (err && err.message) ? err.message : 'unknown' });
+    liveText(info, 'k.loadFail', { msg: (err && err.message) ? err.message : 'unknown' });
     toast(t('k.loadFailToast', { msg: (err && err.message) ? err.message : 'unknown' }), 6000);
   }
 }
@@ -924,7 +974,7 @@ function finishKaraoke() {
   const k = KARAOKE;
   const report = k.scorer ? k.scorer.buildReport() : null;
   $('#karaokeHint').classList.remove('live');
-  $('#karaokeHint').textContent = t('k.hintDone');
+  liveText('#karaokeHint', 'k.hintDone');
   if (!report) return;
   renderKaraokeReport(report);
   if (k.songName) {
@@ -978,15 +1028,20 @@ function renderKaraokeReport(r) {
 
   el.querySelectorAll('[data-seek]').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      const t = Number(btn.dataset.seek);
+      const seekTime = Number(btn.dataset.seek);
       const k = KARAOKE;
-      await k.player.seek(t);
+      if (!await prepareKaraokeMic()) return;
+      await k.player.seek(seekTime);
       k.scorer = new KaraokeScorer({ ref: k.ref, lyrics: k.lyrics });
       k.lastEval = null;
       el.hidden = true;
       const ok2 = await k.player.play();
-      if (ok2) setKaraokePlayLabel(true);
-      toast(t('k.jumpToast', { time: formatTime(t) }));
+      if (ok2) {
+        setKaraokePlayLabel(true);
+        $('#karaokeHint').classList.add('live');
+        liveText('#karaokeHint', 'k.hintLive');
+        toast(t('k.jumpToast', { time: formatTime(seekTime) }));
+      }
     });
   });
 }
@@ -1016,9 +1071,10 @@ function updateKaraokeStatus() {
   } else {
     $('#karaokeCents').textContent = '--';
   }
-  if (ev) {
-    const bars = Math.round(Math.min(1, (ev.level || 0) * 12) * 20);
-    $('#karaokeLevel').textContent = '▮'.repeat(bars) + '▯'.repeat(20 - bars);
+  if (ev && state.micOn) {
+    $('#karaokeLevel').value = Math.min(1, (ev.level || 0) * 12);
+  } else {
+    $('#karaokeLevel').value = 0;
   }
   if (k.scorer) $('#karaokeLiveScore').textContent = String(k.scorer.score);
   if (k.scorer) {
@@ -1222,14 +1278,22 @@ function escapeHTML(s) {
 window.__mm = { state, engine };
 
 initLang();
+$('#micBtnText').textContent = t('mic.enable');
+$('#micHint').textContent = t('mic.privacy');
 initOctaveBase();
 initKaraoke();
 // K歌初始化会改写按钮文案，这里再套用一次语言，保证首屏就是当前语言
 applyI18n(document);
+for (const id of ['runnerPhase', 'rangeStartBtn', 'rangeResult', 'karaokePlayBtn', 'karaokeHint', 'karaokeFileInfo', 'karaokePairInfo', 'karaokeLyric', 'karaokeProgressText']) {
+  const el = $('#' + id);
+  el.dataset.liveKey = el.getAttribute('data-i18n');
+  el.removeAttribute('data-i18n');
+}
 initPractice();
 renderLearn();
 // 初始空状态：让音名显示占位符而不是残留的渐变块
 $('#tunerNote').classList.add('flat');
 $('#tunerNote').textContent = '--';
 drawGauge(0, false);
+drawPitchCurve();
 requestAnimationFrame(tick);

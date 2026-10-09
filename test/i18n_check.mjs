@@ -1,6 +1,6 @@
 // test/i18n_check.mjs —— i18n 键完整性检查
 // 目标：HTML/JS 引用的每个键都必须在字典里存在；缺键会让界面直接显示键名（已修过一次这类 bug）。
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 const base = new URL('../', import.meta.url).pathname;
 const i18nSrc = readFileSync(base + 'js/i18n.js', 'utf8');
@@ -20,6 +20,19 @@ const add = (k, where) => {
 };
 
 const html = readFileSync(base + 'index.html', 'utf8');
+// 组件中的静态键、Text 和属性提示与 HTML 同样需要检查。
+const components = readdirSync(base + 'src', { recursive: true })
+  .filter(f => f.endsWith('.jsx'));
+for (const f of components) {
+  const src = readFileSync(base + 'src/' + f, 'utf8');
+  for (const m of src.matchAll(/['"]([a-z]+\.[a-zA-Z0-9_.]+)['"]/g)) add(m[1], 'src/' + f);
+  for (const m of src.matchAll(/data-i18n-attr="([^"]+)"/g)) {
+    for (const pair of m[1].split(',')) {
+      const idx = pair.indexOf(':');
+      if (idx > 0) add(pair.slice(idx + 1).trim(), 'src/' + f + ':data-i18n-attr');
+    }
+  }
+}
 for (const m of html.matchAll(/data-i18n="([^"]+)"/g)) add(m[1], 'index.html:data-i18n');
 for (const m of html.matchAll(/data-i18n-html="([^"]+)"/g)) add(m[1], 'index.html:data-i18n-html');
 for (const m of html.matchAll(/data-i18n-attr="([^"]+)"/g)) {
@@ -33,6 +46,7 @@ for (const f of ['js/app.js', 'js/karaoke.js', 'js/exercises.js', 'js/lessons.js
   const src = readFileSync(base + f, 'utf8');
   for (const m of src.matchAll(/\bt\(\s*['"]([a-zA-Z0-9_.]+)['"]/g)) add(m[1], f + ':t()');
   for (const m of src.matchAll(/canvasText\(\s*['"]([a-zA-Z0-9_.]+)['"]/g)) add(m[1], f + ':canvasText()');
+  for (const m of src.matchAll(/liveText\([^,]+,\s*['"]([a-zA-Z0-9_.]+)['"]/g)) add(m[1], f + ':liveText()');
 }
 
 let pass = 0, fail = 0;

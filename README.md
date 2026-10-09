@@ -2,6 +2,18 @@
 
 纯前端的唱歌基本功训练工具：打开网页、允许麦克风，就能实时看到自己的音准、音高曲线、频谱与共鸣指标，并跟着结构化练习打分。**无需注册、无服务器，所有音频都在浏览器本地分析，关闭页面即消失。**
 
+[打开歌声练功房](https://mappedinfo.github.io/musicmaster/)
+
+## 当前状态与接续
+
+继续开发前，先阅读本节及下方的运行、测试和部署说明。本节是项目当前状态入口。
+
+- 当前界面采用 React + Vite，按工作台、共享控件和功能面板拆分组件；音频分析内核保留在 `js/`。
+- 音名基准、语言和麦克风位于顶部；K歌上传歌曲、伴奏、歌词与播放设置位于曲线前。长说明可展开阅读。
+- 页面切换保留训练状态；停止录音释放声音采集，已导入歌曲留在当前页面内存中，重新启用麦克风后可继续练习。
+- 发布流程先运行单元检查与构建，再把 `dist/` 部署到 GitHub Pages。本地音源分离工具、测试和音频素材不进入网站成品。
+- 本轮验证记录更新于 2026-10-09；浏览器回归入口为 `test/ui_smoke.py`，覆盖双语、多视口、键盘操作、麦克风拒绝后的恢复、音名基准及K歌上传与报告。截图见下方。
+
 ## 功能
 
 - **音准仪**：YIN 基频检测（±1 音分精度），音分表盘（±10 优 / ±25 合格 / ±50 唱错音）、实时音高曲线、唱名（do re mi…）提示。
@@ -11,7 +23,7 @@
 - **音名八度基准**：可切换 C4=中央C（GarageBand / Logic / 科学音高记号）或 C3=中央C（Cubase / MuseScore / 部分硬件）。内部一律用 MIDI 编号计算，切换只影响显示。
 - **音域测试**：滑音探测最低/最高音（2%/98% 分位抗噪）。
 - **入门课程**：腹式呼吸、音准与音分、胸声/头声/混声（M1/M2/换声点）、共鸣科学、量化指标速查 + 四周入门计划。
-- **中英双语**：界面、练习、K歌报告与课程正文全部支持中文 / English，右上角切换并记忆选择；默认跟随浏览器语言。
+- **中英双语**：界面、练习、K歌报告与课程正文全部支持中文 / English，顶部切换并记忆选择；默认跟随浏览器语言。
 - **移动端适配**：手机 / iPad / 横屏布局、触摸目标 ≥32px、画布自适应、刘海屏安全区；手机默认开启 K歌外放回声消除。
 
 ## 界面
@@ -30,35 +42,46 @@
 
 ## 技术要点
 
-- 零依赖、零构建：原生 ES Modules + Canvas，直接静态部署。
-- 音频管线：getUserMedia（关闭回声消除/降噪/自动增益）→ AudioWorklet 采集 → 主线程 YIN 音高检测（CMNDF + 抛物线插值，帧 2048 / 跳跃 512）+ AnalyserNode 频谱特征。
+- React 组件负责界面与导航，Canvas 和独立音频模块负责实时显示、训练与分析。Vite 构建生成静态成品，依赖版本锁定在 `package-lock.json`。
+- 音频管线：getUserMedia → AudioWorklet 采集 → 主线程 YIN 音高检测（CMNDF + 抛物线插值，帧 2048 / 跳跃 512）+ AnalyserNode 频谱特征。外放模式控制回声消除与降噪，自动增益关闭。
 - K歌离线旋律提取：decodeAudioData → OfflineAudioContext 重采样到 16kHz 单声道 → Web Worker 逐帧 YIN（帧 2048 / 跳跃 480，60–1100 Hz）→ 中值滤波去八度毛刺。
 - K歌实时打分：只在参考线有音高的帧上比，±0.35s 窗口内取最近参考音，±50 音分算唱准；覆盖率、平均偏差、整体倾向、波动四项统计 + 4 秒分段，据此生成"偏低/偏高/波动/音域不合"等针对性建议。
 - 部署：GitHub Actions 静态 Pages 工作流（见 .github/workflows/pages.yml）。
 
 ## 本地运行
 
+需要 Node.js 22.12+（推荐 24）。
+
 ```bash
-python3 -m http.server 8901   # 任意静态服务器
+npm ci
+npm run dev
 # 打开 http://localhost:8901
+```
+
+检查发布成品：
+
+```bash
+npm run build
+npm run preview
 ```
 
 麦克风权限要求 HTTPS 或 localhost。
 
 ## 部署到 GitHub Pages
 
-推送到 GitHub 后：仓库 Settings → Pages → Source 选 **GitHub Actions**，推送 main 分支即自动发布。
+仓库 Settings → Pages → Source 选择 **GitHub Actions**。推送 `main` 后，工作流执行 `npm ci`、`npm test` 和 `npm run build`，仅上传 `dist/`。构建资源使用相对地址，支持 `/musicmaster/` 项目子路径；Worker 和 AudioWorklet 也由构建管理。
 
 ## 测试
 
 ```bash
-node test/dsp.test.mjs          # DSP 单元测试（合成信号验证 YIN 精度等，19 项）
-node test/karaoke.test.mjs      # K歌单元测试（LRC 解析、打分、提示键，74 项）
-python3 test/smoke.py           # Playwright 冒烟测试（需 pip install playwright + chromium）
-python3 test/karaoke_smoke.py   # K歌端到端测试（上传 WAV → 提取旋律 → 打分 → 报告）
-python3 test/mobile_smoke.py    # 移动端适配（5 种视口：无横向溢出、触控目标、画布）
-python3 test/i18n_smoke.py      # 中英双语（逐面板扫描残留中文、切换与持久化）
+npm test                      # DSP 19项、K歌74项、双语键完整性5项
+uv run --with playwright playwright install chromium
+npm run test:ui                # 先启动 dev 或 preview；验证实际操作并更新截图
+uv run --with playwright python test/smoke.py
+uv run --with playwright python test/karaoke_smoke.py
 ```
+
+`test/ui_smoke.py` 支持 `BASE_URL` 指向部署站点或带子路径的成品；`SCREENSHOT_DIR` 可指定截图输出位置，`PLAYWRIGHT_CHROMIUM_EXECUTABLE` 可指定浏览器。旧的专项回归脚本仍保留在 `test/`。
 
 K歌端到端测试会生成一个 A4 正弦 WAV，验证提取出的参考音高落在 MIDI 69 附近，并检查唱准时的评分与报告渲染。
 

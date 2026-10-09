@@ -361,7 +361,7 @@ export function extractReference(pcm, sampleRate = TARGET_SR, onProgress = null)
   return new Promise((resolve, reject) => {
     let worker;
     try {
-      worker = new Worker('js/pitch-worker.js', { type: 'module' });
+      worker = new Worker(new URL('./pitch-worker.js', import.meta.url), { type: 'module' });
     } catch (err) {
       reject(err);
       return;
@@ -562,10 +562,8 @@ export class KaraokePlayer {
     this.onFrame(this.lastEval);
   }
 
-  stop() {
-    this._stopLoops();
-    try { if (this.audio) this.audio.pause(); } catch (err) { /* ignore */ }
-    this.playing = false;
+  /** 暂停采集时保留已导入歌曲，重新启用麦克风后可以继续练习。 */
+  stopMicrophone() {
     if (this.micStream) {
       this.micStream.getTracks().forEach((tr) => tr.stop());
       this.micStream = null;
@@ -576,6 +574,13 @@ export class KaraokePlayer {
     }
     this.micAnalyser = null;
     this.micOn = false;
+  }
+
+  stop() {
+    this._stopLoops();
+    try { if (this.audio) this.audio.pause(); } catch (err) { /* ignore */ }
+    this.playing = false;
+    this.stopMicrophone();
     this.release();
   }
 

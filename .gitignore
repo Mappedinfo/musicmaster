@@ -17,3 +17,8 @@ stems/
 *.onnx
 *.ckpt
 *.safetensors
+
+# 前端依赖和构建输出
+node_modules/
+dist/
+.vite/

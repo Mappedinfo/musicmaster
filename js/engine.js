@@ -40,7 +40,7 @@ export class AudioEngine {
       },
     });
     this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-    await this.ctx.audioWorklet.addModule('js/capture-worklet.js');
+    await this.ctx.audioWorklet.addModule(new URL('./capture-worklet.js', import.meta.url));
     const source = this.ctx.createMediaStreamSource(this.stream);
     await this._wireGraph(source);
   }
@@ -52,7 +52,7 @@ export class AudioEngine {
   async startTest(freq = 220) {
     if (this._running) return;
     this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-    await this.ctx.audioWorklet.addModule('js/capture-worklet.js');
+    await this.ctx.audioWorklet.addModule(new URL('./capture-worklet.js', import.meta.url));
     const osc = this.ctx.createOscillator();
     osc.type = 'sine';
     osc.frequency.value = freq;
@@ -81,12 +81,11 @@ export class AudioEngine {
   }
 
   stop() {
-    if (!this._running) return;
     this._running = false;
-    if (this._node) { this._node.disconnect(); this._node.port.onmessage = null; }
+    if (this._node) { this._node.disconnect(); this._node.port.onmessage = null; this._node = null; }
     if (this._testOsc) { try { this._testOsc.stop(); } catch (_) {} this._testOsc = null; }
     if (this.stream) this.stream.getTracks().forEach(t => t.stop());
-    if (this.ctx) this.ctx.close();
+    if (this.ctx) this.ctx.close().catch(() => {});
     this.ctx = null; this.stream = null; this.analyser = null;
   }
 
