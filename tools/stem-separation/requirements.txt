@@ -1,0 +1,11 @@
+# 依赖的规范来源。
+# tools/stem-separation/separate.py 的 PEP 723 内联元数据必须与此保持一致，
+# test_separate.py 会校验两者相同。
+#
+# 已验证组合：macOS arm64 + CPython 3.11.14（uv 管理）
+#   demucs 4.1.0 / torch 2.14.1 / torchaudio 2.11.0 / numpy 2.4.6
+# 其他平台如遇轮子不可用，可放宽 == 后面的版本号（torchaudio 必须与 torch 搭配）。
+demucs==4.1.0
+torch==2.14.1
+torchaudio==2.11.0
+numpy==2.4.6
