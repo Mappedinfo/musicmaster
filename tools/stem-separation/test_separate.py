@@ -164,6 +164,35 @@ with tempfile.TemporaryDirectory() as tmp:
     check("TORCH_HOME 指向 --cache-dir", captured.get("env", {}).get("TORCH_HOME") == str(cache_dir.resolve()),
           str(captured.get("env", {}).get("TORCH_HOME")))
     check("--cache-dir 目录已创建", cache_dir.is_dir())
+    check("HF_HOME 与 Torch 缓存共同隔离", captured.get("env", {}).get("HF_HOME") == str((cache_dir / "huggingface").resolve()))
+    check("HF_HUB_CACHE 指向私有 hub 缓存", captured.get("env", {}).get("HF_HUB_CACHE") == str((cache_dir / "huggingface" / "hub").resolve()))
+
+    # 离线必须显式选择 HF 分支，避免正常名称触发 legacy Torch 联网回退。
+    offline = parse_args([str(track), "--offline"])
+    check("offline 强制 HF 模型分支", flag_value(separate.build_command(offline), "-n") == "hf://htdemucs")
+    explicit = parse_args([str(track), "--offline", "--model", "hf://htdemucs"])
+    check("显式 HF 模型不会重复前缀", flag_value(separate.build_command(explicit), "-n") == "hf://htdemucs")
+    env = separate.child_env(str(cache_dir), offline=True)
+    check("offline 设置 HF_HUB_OFFLINE", env.get("HF_HUB_OFFLINE") == "1")
+    check("offline 设置 TRANSFORMERS_OFFLINE", env.get("TRANSFORMERS_OFFLINE") == "1")
+    uncached = tmpdir / "dry-cache"
+    code, _ = run_main([str(track), "--dry-run", "--cache-dir", str(uncached)])
+    check("dry-run 不创建缓存目录", code == 0 and not uncached.exists())
+    err = expect_error(separate.validate, parse_args([]), require_ffmpeg=False)
+    check("空输入需明确 prepare-model", err is not None)
+    err = expect_error(separate.validate, parse_args(["--prepare-model"]), require_ffmpeg=False)
+    check("prepare-model 允许没有音频", err is None)
+    err = expect_error(separate.validate, parse_args([str(track), "--prepare-model"]), require_ffmpeg=False)
+    check("prepare-model 不接受音频", err is not None)
+    called = []
+    separate.subprocess.run = explode
+    try:
+        prepare_out = tmpdir / "prepare-dry"
+        code, printed = run_main(["--prepare-model", "--dry-run", "-o", str(prepare_out)])
+    finally:
+        separate.subprocess.run = real_run
+    check("prepare dry-run 不调用模型或建输出", code == 0 and not called and not prepare_out.exists())
+    check("prepare 只调用 HF loader，不含音频路径", "get_hf_model" in printed and str(track) not in printed)
 
     # 6) demucs 失败时透传退出码
     separate.subprocess.run = lambda cmd, env=None, **kwargs: subprocess.CompletedProcess(cmd, 7)

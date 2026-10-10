@@ -4,7 +4,7 @@
 #
 # 已验证组合：macOS arm64 + CPython 3.11.14（uv 管理）
 #   demucs 4.1.0 / torch 2.14.1 / torchaudio 2.11.0 / numpy 2.4.6
-# 其他平台如遇轮子不可用，可放宽 == 后面的版本号（torchaudio 必须与 torch 搭配）。
+# TorchAudio 2.11 起使用稳定 ABI，支持 torch 2.11+；其它平台仍需核验轮子与运行。
 demucs==4.1.0
 torch==2.14.1
 torchaudio==2.11.0

@@ -22,3 +22,7 @@ stems/
 node_modules/
 dist/
 .vite/
+
+# 本地 Python 工具的运行缓存
+__pycache__/
+*.pyc

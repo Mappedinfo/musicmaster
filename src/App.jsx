@@ -22,6 +22,7 @@ function Navigation() {
       panel.setAttribute('aria-labelledby', `nav-${tab.id}`);
       panel.setAttribute('tabindex', '0');
     }
+    window.dispatchEvent(new CustomEvent('musicmaster:tab-change', { detail: { tab: active } }));
   }, [active]);
   function navigate(event, index) {
     let next;

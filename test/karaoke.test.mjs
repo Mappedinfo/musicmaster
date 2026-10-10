@@ -33,10 +33,14 @@ check('lrc 毫秒', lines.some((l) => l.text === '毫秒精度' && Math.abs(l.ti
 check('lrc 跳过无标签行', !lines.some((l) => l.text.includes('没有时间标签')));
 
 // ---------- 2) 当前歌词行查找 ----------
-check('歌词 before 第一句', K.activeLyricIndex(lines, 0) === 0);
-check('歌词 正在第二句', K.activeLyricIndex(lines, 13) === 1);
+check('歌词 before 第一句', K.activeLyricIndex(lines, 0) === -1);
+check('歌词 首句精确起点', K.activeLyricIndex(lines, 12.5) === 0);
+check('歌词 首句区间不提前显示下一句', K.activeLyricIndex(lines, 13) === 0);
+check('歌词 第二句精确起点', K.activeLyricIndex(lines, 15) === 1);
+check('歌词 正在第二句', K.activeLyricIndex(lines, 20) === 1);
 check('歌词 超过最后一句', K.activeLyricIndex(lines, 999) === lines.length - 1);
 check('歌词 空数组', K.activeLyricIndex([], 5) === -1);
+check('歌词 非有限时间', K.activeLyricIndex(lines, NaN) === -1);
 
 // ---------- 3) 打分器：唱得准 ----------
 function makeRef(total = 30, hop = 0.01) {
@@ -51,6 +55,12 @@ function feed(scorer, ref, offsetCents, frames = 800, startT = 0) {
   }
 }
 const ref30 = makeRef(30);
+const denseRef = { times: [], midis: [], hopSec: 0.005 };
+for (let i = 0; i < 201; i++) { denseRef.times.push(i * 0.005); denseRef.midis.push(i === 40 ? 69 : null); }
+const denseWindow = new K.KaraokeScorer({ ref: denseRef, windowSec: 0.35 });
+check('参考窗口按秒完整搜索 5ms 帧', denseWindow.feed(0, 69)?.hit === true);
+const tightWindow = new K.KaraokeScorer({ ref: denseRef, windowSec: 0.05 });
+check('参考窗口不越过设置的时间容差', tightWindow.feed(0, 69) === null);
 const sGood = new K.KaraokeScorer({ ref: ref30 });
 feed(sGood, ref30, 0);
 check('全准：音准率=1', Math.abs(sGood.inTune - 1) < 1e-9, String(sGood.inTune));

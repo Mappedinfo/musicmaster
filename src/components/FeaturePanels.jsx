@@ -1,4 +1,8 @@
+import { memo, useState } from 'react';
 import { Icon, PanelHeading, Text } from './ui.jsx';
+import { t } from '../../js/i18n.js';
+import RecordingReview from './RecordingReview.jsx';
+import { useReviewLanguage } from './recordingReviewUtils.js';
 
 function FileControl({ id, accept, titleKey, title, buttonKey, button, children }) {
   return (
@@ -80,10 +84,31 @@ export function PracticePanel() {
 }
 
 export function KaraokePanel() {
-  return (
-    <section id="tab-karaoke" className="tab-panel panel-stack">
-      <PanelHeading title="k.title" subtitle="k.subtitle" />
+  useReviewLanguage();
+  const [mode, setMode] = useState('live');
+  function switchMode(next) {
+    if (next === mode) return;
+    setMode(next);
+    window.dispatchEvent(new CustomEvent('musicmaster:karaoke-mode', { detail: { mode: next } }));
+  }
+  return <section id="tab-karaoke" className="tab-panel panel-stack">
+    {mode === 'live' && <PanelHeading title="k.title" subtitle="k.subtitle" />}
+    <div className="karaoke-mode-bar">
+      <div className="karaoke-modes" role="group" aria-label={t('recording.modeLabel')}>
+        <button type="button" id="liveModeBtn" className={mode === 'live' ? 'active' : ''} aria-pressed={mode === 'live'} onClick={() => switchMode('live')}>{t('recording.liveMode')}</button>
+        <button type="button" id="reviewModeBtn" className={mode === 'review' ? 'active' : ''} aria-pressed={mode === 'review'} onClick={() => switchMode('review')}>{t('recording.reviewMode')}</button>
+      </div>
+      <p className="muted">{t(mode === 'review' ? 'recording.noMic' : 'recording.liveHint')}</p>
+    </div>
+    <div id="karaokeLive" className="karaoke-live" hidden={mode !== 'live'}><LiveKaraokePanel /></div>
+    <RecordingReview active={mode === 'review'} />
+  </section>;
+}
 
+// 实时训练节点由旧控制器持有；切换模式时只隐藏容器，不让 React 重建它们。
+const LiveKaraokePanel = memo(function LiveKaraokePanel() {
+  return (
+    <>
       <div className="card k-pick-card karaoke-source-card">
         <div className="karaoke-upload-grid">
           <FileControl
@@ -186,9 +211,9 @@ export function KaraokePanel() {
           <p className="muted" data-i18n="k.guideNote">说明：本工具的参考旋律是从你的音频里自动提取的，可能受伴奏影响；评分和指导是练习参考，不是声乐或医学诊断。</p>
         </div>
       </details>
-    </section>
+    </>
   );
-}
+});
 
 export function SpectrumPanel() {
   return (

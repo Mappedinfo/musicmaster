@@ -44,6 +44,7 @@ const state = {
   octaveBase: 0,        // 0: C4=中央C（GarageBand/Logic）；1: C3=中央C（Cubase/MuseScore）
   karaoke: {
     active: false,      // 面板是否已初始化
+    mode: 'live',
     player: null,
     ref: null,          // { times, midis, hopSec }
     scorer: null,
@@ -133,6 +134,7 @@ function initOctaveBase() {
   sel.addEventListener('change', () => {
     state.octaveBase = Number(sel.value) || 0;
     try { localStorage.setItem(OCTAVE_BASE_STORAGE, String(state.octaveBase)); } catch (err) { /* ignore */ }
+    window.dispatchEvent(new CustomEvent('musicmaster:octave-change', { detail: { octaveBase: state.octaveBase } }));
     toast(state.octaveBase === 1
       ? t('octave.toastC3')
       : t('octave.toastC4'));
@@ -757,7 +759,7 @@ function tick() {
     drawExerciseCurve();
     drawSpectrum();
   }
-  if (state.karaoke.active) drawKaraoke();
+  if (state.karaoke.active && state.karaoke.mode === 'live') drawKaraoke();
   requestAnimationFrame(tick);
 }
 
@@ -816,6 +818,19 @@ function initKaraoke() {
     },
   });
   k.player = player;
+
+  // 录音复盘不需要采集；暂停实时通道，但保留歌曲、位置和已取得的结果。
+  window.addEventListener('musicmaster:karaoke-mode', (event) => {
+    k.mode = event.detail?.mode === 'review' ? 'review' : 'live';
+    if (k.mode === 'review') {
+      player.pause();
+      player.stopMicrophone();
+      k.live = null;
+      k.lastEval = null;
+      setKaraokePlayLabel(false);
+      updateKaraokeStatus();
+    }
+  });
 
   setKaraokePlayLabel(false);
 

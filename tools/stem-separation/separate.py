@@ -35,6 +35,7 @@ PROG = "separate.py"
 DEMUCS_MODULE = "demucs.separate"
 DEFAULT_MODEL = "htdemucs"
 DEFAULT_OUT = "stems"
+DEFAULT_CACHE = str(Path(__file__).resolve().parents[2] / "stems" / ".model-cache")
 DEFAULT_TWO_STEMS = "vocals"
 TWO_STEM_CHOICES = ("vocals", "drums", "bass", "other", "none")
 OTHER_METHOD_CHOICES = ("none", "add", "minus")
@@ -54,7 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="本地音源分离：把混音拆成人声与伴奏（Demucs 薄包装；不上传、不托管结果）。",
         epilog="用法与性能参考见 tools/stem-separation/README.md",
     )
-    parser.add_argument("tracks", nargs="+", help="输入音频文件（可多个）")
+    parser.add_argument("tracks", nargs="*", help="输入音频文件（可多个；--prepare-model 可省略）")
     parser.add_argument("-o", "--out", default=DEFAULT_OUT, help="输出根目录（默认 %s）" % DEFAULT_OUT)
     parser.add_argument("-n", "--model", default=DEFAULT_MODEL, help="demucs 模型名（默认 %s）" % DEFAULT_MODEL)
     parser.add_argument(
@@ -74,8 +75,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mp3", action="store_true", help="输出 mp3（默认输出 wav）")
     parser.add_argument("--mp3-bitrate", type=int, default=None, help="mp3 码率，如 320")
     parser.add_argument("--flac", action="store_true", help="输出 flac")
-    parser.add_argument("--cache-dir", default=None,
-                        help="模型权重缓存目录（会设为子进程的 TORCH_HOME）；默认 ~/.cache/torch")
+    parser.add_argument("--cache-dir", default=DEFAULT_CACHE,
+                        help="缓存根目录，同时隔离 Torch 与 HF 缓存（默认 stems/.model-cache）")
+    parser.add_argument("--prepare-model", action="store_true", help="只下载并验证模型，不读取音频")
+    parser.add_argument("--offline", action="store_true", help="仅使用已缓存的 Hugging Face 模型；缺失时失败，不回退联网")
     parser.add_argument("--dry-run", action="store_true", help="只打印解析后的命令，不下载权重、不执行")
     return parser
 
@@ -83,7 +86,9 @@ def build_parser() -> argparse.ArgumentParser:
 def build_command(opts: argparse.Namespace) -> List[str]:
     """把解析后的参数翻译成 demucs 命令行（纯函数，便于单测）。"""
     cmd = [sys.executable, "-m", DEMUCS_MODULE]
-    cmd += ["-n", opts.model]
+    # hf:// 禁止 get_model() 的 legacy Torch 网络回退；HF_HUB_OFFLINE 限制缓存访问。
+    model = opts.model if not opts.offline or opts.model.startswith("hf://") else "hf://" + opts.model
+    cmd += ["-n", model]
     cmd += ["-o", str(Path(opts.out).expanduser().resolve())]
     if opts.two_stems and opts.two_stems != "none":
         cmd += ["--two-stems", opts.two_stems]
@@ -113,7 +118,11 @@ def build_command(opts: argparse.Namespace) -> List[str]:
 
 def validate(opts: argparse.Namespace, require_ffmpeg: bool = True) -> None:
     """校验输入与环境；不满足时抛 SeparationError。"""
-    if require_ffmpeg and shutil.which("ffmpeg") is None:
+    if not opts.tracks and not opts.prepare_model:
+        raise SeparationError("请提供输入音频，或使用 --prepare-model 仅准备模型")
+    if opts.prepare_model and opts.tracks:
+        raise SeparationError("--prepare-model 不接收音频；请将模型准备与推理分开执行")
+    if require_ffmpeg and not opts.prepare_model and shutil.which("ffmpeg") is None:
         raise SeparationError("未找到 ffmpeg；demucs 读写音频依赖它（macOS: brew install ffmpeg）")
     for track in opts.tracks:
         path = Path(track).expanduser()
@@ -126,13 +135,24 @@ def validate(opts: argparse.Namespace, require_ffmpeg: bool = True) -> None:
         raise SeparationError("输出路径已存在但不是目录: %s" % out)
 
 
-def child_env(cache_dir: Optional[str]) -> dict:
-    """构造子进程环境；--cache-dir 会变成 TORCH_HOME（demucs 的权重下载位置）。"""
+def child_env(cache_dir: Optional[str], offline: bool = False, create: bool = True) -> dict:
+    """隔离 HF/Torch 缓存；离线模式只允许命中已准备的模型。"""
     env = os.environ.copy()
+    env["HF_HUB_DISABLE_TELEMETRY"] = "1"
+    env["DO_NOT_TRACK"] = "1"
     if cache_dir:
         cache = Path(cache_dir).expanduser()
-        cache.mkdir(parents=True, exist_ok=True)
+        if create:
+            cache.mkdir(parents=True, exist_ok=True)
         env["TORCH_HOME"] = str(cache.resolve())
+        env["HF_HOME"] = str((cache / "huggingface").resolve())
+        env["HF_HUB_CACHE"] = str((cache / "huggingface" / "hub").resolve())
+    if offline:
+        env["HF_HUB_OFFLINE"] = "1"
+        env["TRANSFORMERS_OFFLINE"] = "1"
+    else:
+        env.pop("HF_HUB_OFFLINE", None)
+        env.pop("TRANSFORMERS_OFFLINE", None)
     return env
 
 
@@ -156,8 +176,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("错误: %s" % exc, file=sys.stderr)
         return EXIT_USAGE
 
-    cmd = build_command(opts)
-    env = child_env(opts.cache_dir)
+    if opts.prepare_model:
+        model = opts.model.removeprefix("hf://")
+        # 只选择 HF 分支，下载失败不访问其它权重源。
+        cmd = [sys.executable, "-c", "from demucs.hf import get_hf_model; import sys; "
+               "m=get_hf_model(sys.argv[1]); print('模型已验证:', sys.argv[1], 'sources=', m.sources)", model]
+    else:
+        cmd = build_command(opts)
+    env = child_env(opts.cache_dir, opts.offline, create=not opts.dry_run)
     out_dir = Path(opts.out).expanduser()
 
     # flush：demucs 的进度条走 stderr，管道/重定向时避免两路输出次序错乱
@@ -168,7 +194,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("(--dry-run：未执行，也未下载模型权重)", flush=True)
         return EXIT_OK
 
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if not opts.prepare_model:
+        out_dir.mkdir(parents=True, exist_ok=True)
     before = snapshot(out_dir)
 
     try:
@@ -181,6 +208,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("错误: demucs 退出码 %d" % proc.returncode, file=sys.stderr)
         return proc.returncode
 
+    if opts.prepare_model:
+        print("模型准备完成；使用同一 --cache-dir 与 --offline 进行推理。")
+        return EXIT_OK
     produced = sorted({item[0] for item in snapshot(out_dir) - before})
     print("\n完成，本次产出 %d 个文件:" % len(produced))
     for path in produced:

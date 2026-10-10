@@ -1,133 +1,67 @@
-# 本地音源分离（tools/stem-separation）
+# 本地音源分离
 
-把一首混音拆成人声与伴奏，用来准备 K 歌练习素材。
+用 Demucs 把混音拆成人声与伴奏。代码可以发布；音频、模型和个人报告只放在根目录已忽略的 `stems/` 中。它是本机工具，GitHub Pages 不执行 Python 或模型推理。
 
-## 边界（先读这段）
+## 先准备，后离线推理
 
-- **这是本地命令行工具，不是网页应用的一部分。** 网页（`js/`、`index.html`）不引用它，也不需要运行它。
-- **纯本地**：不上传音频、不托管结果、不提供任何服务，全程只读写你本机的文件。
-- **请仅处理你依法有权使用的音频。** 本工具不附带、不下载、不索引任何歌曲或成品伴奏。
-- 本目录只发布代码；仓库不提交任何音频文件与模型权重（见根目录 `.gitignore`）。
-
-## 快速开始
+前置要求：`uv`、Python 3.10+、PATH 中的 `ffmpeg`。建议使用 Python 3.11。依赖固定在 [requirements.txt](requirements.txt)，与脚本的 PEP 723 元数据一致。
 
 ```bash
-# 分离人声与伴奏（默认只分 vocals / no_vocals），输出到 stems/
-uv run tools/stem-separation/separate.py song.mp3 --two-stems vocals -o stems
+# 在仓库根目录运行；所有依赖/模型缓存留在 stems/。
+export UV_CACHE_DIR="$PWD/stems/.model-cache/uv"
 
-# 输出 mp3 而不是默认的 wav
-uv run tools/stem-separation/separate.py song.mp3 --mp3 --mp3-bitrate 320
+# 联网阶段只安装依赖、下载并验证模型，不接收音频输入。
+uv run --python 3.11 tools/stem-separation/separate.py --prepare-model
 
-# 四轨全分（鼓 / 贝斯 / 其他 / 人声）
-uv run tools/stem-separation/separate.py song.mp3 --two-stems none
-
-# 只想看看会执行什么命令，不下载权重也不跑
-uv run tools/stem-separation/separate.py song.mp3 --dry-run
+# 模型准备成功后，显式离线处理本地音频。
+uv run --offline --python 3.11 tools/stem-separation/separate.py /path/to/mix.m4a \
+  --offline --device cpu --shifts 0 --out stems/private/my-run/separated
 ```
 
-`separate.py` 带 PEP 723 内联依赖元数据，所以 `uv run` 会自动准备环境，无需手动建虚拟环境。
-如果你用 pip，则 `pip install -r tools/stem-separation/requirements.txt` 后直接 `python3 separate.py ...`。
+两个 `--offline` 分别约束 uv 依赖解析与脚本的模型加载。缺少依赖或权重时命令会失败，不静默联网补齐。首次准备可能下载较大的 Torch 轮子和模型，具体时间取决于本机缓存与网络。
 
-前置要求：`ffmpeg` 在 PATH 中（macOS：`brew install ffmpeg`）。缺失时脚本会直接报错退出，不会静默失败。
+Demucs 4.1 使用 Hugging Face 模型；普通模型名加载失败时，上游会回退到旧 Torch 下载源。此包装的离线模式显式使用 `hf://htdemucs` 并设置 `HF_HUB_OFFLINE=1`，避免该回退。`--cache-dir` 同时设置：
+
+- `TORCH_HOME=<cache-dir>`
+- `HF_HOME=<cache-dir>/huggingface`
+- `HF_HUB_CACHE=<cache-dir>/huggingface/hub`
+
+默认缓存根目录是本仓库 `stems/.model-cache/`。已有旧版 Torch 权重不等于已有新版 HF 权重，请先单独准备并验证。
 
 ## 参数
 
 | 参数 | 默认 | 说明 |
 | --- | --- | --- |
-| `tracks` | — | 输入音频，可以给多个 |
-| `-o, --out` | `stems` | 输出根目录，不存在会自动创建 |
-| `-n, --model` | `htdemucs` | demucs 模型名 |
-| `--two-stems` | `vocals` | 只分 STEM 与 no_STEM；取 `vocals`/`drums`/`bass`/`other`/`none`（`none` = 四轨全分） |
-| `--other-method` | 不传 | `none`/`add`/`minus`，no_STEM 的取法 |
-| `--shifts` | 不传 | 随机移位次数，越大越慢、质量越好 |
-| `--overlap` | 不传 | 分段重叠比例 |
-| `--segment` | 不传 | 分段长度（秒） |
-| `-d, --device` | 不传 | `cpu`/`cuda`/`mps`；不传时由 demucs 自行选择 |
-| `-j, --jobs` | 不传 | 并行处理的曲目数 |
-| `--filename` | 不传 | 输出文件名模板，如 `"{track}_{stem}.{ext}"` |
-| `--mp3` / `--mp3-bitrate` / `--flac` | 不传 | 输出格式；默认 wav |
-| `--cache-dir` | 不传 | 权重缓存目录，会设为子进程的 `TORCH_HOME` |
-| `--dry-run` | 关 | 只打印解析后的命令，不下载权重、不执行 |
+| 输入文件 | — | 可多个；模型准备时不允许输入音频 |
+| `--prepare-model` | 关 | 仅准备/验证模型，不分离、不建立音频输出目录 |
+| `--offline` | 关 | 仅加载已缓存 HF 模型，缺少时失败 |
+| `--cache-dir` | `stems/.model-cache` | 隔离 HF 与 Torch 缓存 |
+| `-o, --out` | `stems` | 输出根目录 |
+| `-n, --model` | `htdemucs` | 模型名称；离线模式添加 `hf://` 前缀 |
+| `--two-stems` | `vocals` | `vocals/drums/bass/other/none`，`none` 输出四轨 |
+| `--other-method` | 不传 | `none/add/minus`，透传给 Demucs |
+| `--shifts` | 不传 | 随机移位次数；0 便于快速、可重复的本地运行 |
+| `--overlap` / `--segment` | 不传 | 分段重叠比例与长度 |
+| `-d, --device` | 不传 | `cpu/cuda/mps`；本项目优先验证 CPU |
+| `-j, --jobs` | 不传 | 曲目并行数 |
+| `--filename` | 不传 | 输出文件模板 |
+| `--mp3` / `--mp3-bitrate` / `--flac` | 不传 | 输出格式；默认 WAV |
+| `--dry-run` | 关 | 打印命令，不执行、不创建缓存/输出目录 |
 
-除校验与路径解析外，所有参数都原样透传给 `demucs.separate`，本工具不改变 demucs 的默认行为。
+注意：`uv run` 会先解析 PEP 723 依赖，即使脚本传了 `--dry-run` 也可能准备环境。只检查命令且不准备依赖时，用已有 Python 直接执行 `python3 separate.py ... --dry-run`；脚本顶层只有标准库。
 
-## 退出码
+输出沿用上游布局，离线模型名可能产生额外目录层级；以结束时列出的实际路径为准。通常找到 `vocals.wav` 与 `no_vocals.wav` 即可。两轨模式内部仍运行完整分离模型，不能据此声称比四轨快一倍。相同输出路径会覆盖产物，建议每次使用独立 run-id。
 
-| 码 | 含义 |
-| --- | --- |
-| `0` | 成功 |
-| `2` | 参数或环境校验失败（输入不存在、输入是目录、`-o` 指向文件、缺 ffmpeg） |
-| 其他 | demucs 子进程的退出码被原样透传 |
-| `130` | 用户 Ctrl-C 中断 |
+## 本地分析报告
 
-## 输出结构
+完整流程见 [vocal-analysis](../vocal-analysis/README.md)：一条命令可以先准备模型、离线分离、复用网页内核分析，再生成私有 JSON 和中文 HTML。分离后的人声应按 `sourceKind: separated` 分析，分离残留会限制判断；不要再次用原混音减去该人声。
 
-沿用 demucs 的布局，本工具不重命名、不复制产物：
-
-```
-stems/
-└── htdemucs/            # 模型名
-    └── song/            # 曲目名
-        ├── vocals.wav
-        └── no_vocals.wav
-```
-
-运行结束时会列出本次新增或更新的文件。
-
-## 模型权重与缓存
-
-权重首次运行时由 demucs 自动下载，**不进仓库**：
-
-- 默认缓存位置 `~/.cache/torch/hub/checkpoints`
-- `htdemucs` 的权重文件约 84 MB（实测 `955717e8-8726e21a.th` = 84,141,911 字节）
-- 用 `--cache-dir <dir>` 可以改到别处（会设为子进程的 `TORCH_HOME`）
-- 首次运行需要联网；之后走本地缓存，不再下载
-
-## 性能参考（实测，不是估算）
-
-| 项目 | 数值 |
-| --- | --- |
-| 输入 | 5 分 21 秒、128 kbps mp3 |
-| 模型 / 参数 | `htdemucs`、`--two-stems vocals` |
-| 机器 | Apple Silicon，CPU（MPS 未使用） |
-| 模型推理 | 约 33 秒 |
-| 整个命令 wall time | 1 分 13 秒 |
-| 首次额外开销 | 下载约 84 MB 权重 |
-
-开启 `--shifts 2` 会更慢（换更好的质量）；`--two-stems none` 四轨全分大约是两轨的 2 倍工作量。
-
-## 依赖与已验证组合
-
-依赖清单的规范来源是 [requirements.txt](requirements.txt)，`separate.py` 顶部的 PEP 723 元数据与它保持一致，单元测试会校验两者相同。
-
-已验证组合：macOS arm64 + CPython 3.11.14（uv 管理），demucs 4.1.0 / torch 2.14.1 / torchaudio 2.11.0 / numpy 2.4.6。
-其他平台若遇到某版本没有轮子，可放宽 `==` 后面的版本号；`torchaudio` 必须与 `torch` 搭配。Windows 未验证。
-
-## 上游与许可
-
-- 分离算法与权重来自 [facebookresearch/demucs](https://github.com/facebookresearch/demucs)（Meta，MIT 许可，代码许可证原文已核对）。
-- 本目录只是命令行包装，不含模型权重，也不重新分发权重。
-- demucs 官方仓库已停止维护，预训练权重的许可证 Meta 未在仓库中单独声明（见其 issue #327）；本工具按上游默认方式在运行时下载权重，不随仓库分发。
-
-## 合规
-
-- 处理全在本机完成，不上传、不落盘到任何服务器、不提供服务端接口。
-- 仓库不提交任何音频文件（原曲或分离产物），也不预置任何歌曲；`.gitignore` 已覆盖音频与权重后缀。
-- 不按歌名 / 歌手组织内容，不提供成品伴奏下载。
-- 请遵守你所在地区法律与所用音频的授权范围；本工具不授予任何音频权利。
-
-## 常见问题
-
-- **`未找到 ffmpeg`**：装一个（macOS `brew install ffmpeg`）。demucs 读写 mp3 依赖它。
-- **首次运行卡在下载权重**：权重约 84 MB，网络慢时会等一会儿；也可先用 `--cache-dir` 指到一个你确定可写的目录。
-- **想用 GPU**：`-d mps` 在 macOS 上未经本项目验证，默认走 CPU（实测数据见上表）。
-- **内存**：默认分段推理，长曲子不会一次性吃满内存；`--segment` 可进一步调小。
-- **重复运行**：同一曲目会覆盖上次的输出，不会自动改名。
-
-## 测试
+## 测试与来源
 
 ```bash
-python3 tools/stem-separation/test_separate.py
+UV_CACHE_DIR="$PWD/stems/.model-cache/uv" uv run python tools/stem-separation/test_separate.py
 ```
 
-纯标准库、不需要 demucs / torch：覆盖命令拼装、各参数透传、全部校验失败路径、`--dry-run` 不执行、`--cache-dir` 设置 `TORCH_HOME`、退出码透传、以及依赖清单一致性。
+标准库检查覆盖命令拼装、输入验证、dry-run、模型准备不接收音频、HF/Torch 缓存隔离、离线显式 HF 分支、退出码透传与依赖清单一致性；不会下载模型或读取真实录音。退出码 0 成功、2 参数/环境错误、130 中断，其它分离失败码透传。
+
+上游：[adefossez/demucs](https://github.com/adefossez/demucs)、[Demucs 4.1.0](https://pypi.org/project/demucs/4.1.0/)、[HF 模型加载器](https://github.com/adefossez/demucs/blob/main/demucs/hf.py)。TorchAudio 2.11 起的稳定 ABI 说明见 [官方安装文档](https://docs.pytorch.org/audio/stable/installation.html)。本仓库不分发权重，不附带音频，不授予歌曲使用权。

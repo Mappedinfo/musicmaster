@@ -43,5 +43,10 @@ export default defineConfig({
   plugins: [react(), serviceWorker()],
   // 相对资源地址兼容 GitHub Pages 的 /musicmaster/ 和本地预览。
   base: './',
+  server: {
+    // 私人分析产物既不能触发热更新，也不能被开发服务器当静态文件提供。
+    watch: { ignored: ['**/stems/**'] },
+    fs: { deny: ['.env', '.env.*', '*.{crt,pem,key,p12,pfx,cer,der}', '.npmrc', '.yarnrc.yml', '**/.git/**', '**/stems/**'] },
+  },
   build: { assetsInlineLimit: 0 },
 });

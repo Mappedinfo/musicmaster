@@ -39,16 +39,19 @@ export function parseLRC(text) {
   return lines;
 }
 
-/** 当前时间所在/即将到来的歌词行下标，没有歌词返回 -1。 */
+/** 当前已开始的歌词行下标；首句开始前与没有歌词时返回 -1。 */
 export function activeLyricIndex(lines, t) {
-  if (!lines || !lines.length) return -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (t < lines[i].time) return i;
+  if (!lines || !lines.length || !Number.isFinite(t)) return -1;
+  let lo = 0, hi = lines.length - 1, current = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (lines[mid].time <= t) { current = mid; lo = mid + 1; }
+    else hi = mid - 1;
   }
-  return lines.length - 1;
+  return current;
 }
 
-// 参考旋律线查询：二分找到插入点后在小窗口内取最近的带声帧
+// 按秒搜索完整容差窗口，不能用固定帧数代替时间（参考步长可能为 5/30ms）。
 function nearestRef(ref, t, winSec) {
   const times = ref.times;
   const n = times.length;
@@ -56,12 +59,10 @@ function nearestRef(ref, t, winSec) {
   let lo = 0, hi = n - 1, idx = n;
   while (lo <= hi) {
     const mid = (lo + hi) >> 1;
-    if (times[mid] >= t) { idx = mid; hi = mid - 1; } else lo = mid + 1;
+    if (times[mid] >= t - winSec) { idx = mid; hi = mid - 1; } else lo = mid + 1;
   }
   let best = null, bestD = Infinity;
-  const start = Math.max(0, idx - 16);
-  const end = Math.min(n - 1, idx + 16);
-  for (let i = start; i <= end; i++) {
+  for (let i = idx; i < n && times[i] <= t + winSec; i++) {
     const v = ref.midis[i];
     if (v == null) continue;
     const d = Math.abs(times[i] - t);
