@@ -11,10 +11,11 @@ const keys = new Set(
 );
 
 // 由代码动态拼接出来的键（如 buildTips 返回的 { key: 'tip.' + kind }）
-const DYNAMIC_PREFIXES = ['tip.', 'practice.', 'k.hint'];
+const DYNAMIC_PREFIXES = ['tip.', 'practice.', 'k.hint', 'coach.'];
 
 const used = new Map();
 const add = (k, where) => {
+  if (k.endsWith('.') && DYNAMIC_PREFIXES.includes(k)) return;
   if (!used.has(k)) used.set(k, []);
   used.get(k).push(where);
 };
@@ -47,6 +48,10 @@ for (const f of ['js/app.js', 'js/karaoke.js', 'js/exercises.js', 'js/lessons.js
   for (const m of src.matchAll(/\bt\(\s*['"]([a-zA-Z0-9_.]+)['"]/g)) add(m[1], f + ':t()');
   for (const m of src.matchAll(/canvasText\(\s*['"]([a-zA-Z0-9_.]+)['"]/g)) add(m[1], f + ':canvasText()');
   for (const m of src.matchAll(/liveText\([^,]+,\s*['"]([a-zA-Z0-9_.]+)['"]/g)) add(m[1], f + ':liveText()');
+}
+for (const f of ['js/karaoke-sessions.js']) {
+  const src = readFileSync(base + f, 'utf8');
+  for (const m of src.matchAll(/['"](session\.[a-zA-Z0-9_.]+)['"]/g)) add(m[1], f);
 }
 
 let pass = 0, fail = 0;

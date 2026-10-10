@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom';
 import { t } from '../../js/i18n.js';
 import { decodeMono, TARGET_SR } from '../../js/karaoke.js';
 import { validateRecordingReport } from '../../js/recording-analysis.js';
+import { applyRecordingCapture } from '../../js/recording-capture.js';
 import RecordingReviewChart from './RecordingReviewChart.jsx';
 import { reviewDuration, reviewFileHash, reviewInitialOctave, reviewNote, reviewNumber, reviewSourceMatches, reviewTime, useReviewLanguage } from './recordingReviewUtils.js';
 import { reviewLabel } from './recordingReviewLabels.jsx';
@@ -10,6 +11,7 @@ import { reviewLabel } from './recordingReviewLabels.jsx';
 const ACCEPT_AUDIO = 'audio/*,.wav,.mp3,.m4a,.flac,.aac,.ogg';
 const PREPARE_COMMAND = 'npm run analyze:recording -- "my-recording.m4a" --input-kind mixed';
 const SOURCE_TYPES = ['unknown', 'vocal', 'separated'];
+const REPORT_SOURCE_TYPES = [...SOURCE_TYPES, 'mixed'];
 
 function metricText(key, value) {
   if (!Number.isFinite(value)) return null;
@@ -26,6 +28,7 @@ function Evidence({ values }) {
 function SourceInput({ role, source, kind, onFile, onKind, onRemove }) {
   const id = role === 'vocal' ? 'reviewVocalFile' : 'reviewReferenceFile';
   const input = useRef(null);
+  const choices = kind === 'mixed' ? REPORT_SOURCE_TYPES : SOURCE_TYPES;
   return <div className="review-source">
     <div className="review-source-heading"><label htmlFor={id}>{t(role === 'vocal' ? 'recording.myVocal' : 'recording.referenceVocal')}</label>
       {source && <button type="button" className="review-text-button" onClick={onRemove}>{t('recording.remove')}</button>}
@@ -39,7 +42,7 @@ function SourceInput({ role, source, kind, onFile, onKind, onRemove }) {
     }} />
     <label className="review-source-kind">{t('recording.sourceLabel')}
       <select id={role === 'vocal' ? 'reviewVocalKind' : 'reviewReferenceKind'} value={kind} onChange={event => onKind(event.target.value)}>
-        {SOURCE_TYPES.map(type => <option key={type} value={type}>{reviewLabel('source', type)}</option>)}
+        {choices.map(type => <option key={type} value={type} disabled={type === 'mixed'}>{reviewLabel('source', type)}</option>)}
       </select>
     </label>
     {source && !source.hash && !source.error && <p className="muted" role="status">{t('recording.checkingFile')}</p>}
@@ -68,6 +71,8 @@ export default function RecordingReview({ active }) {
   const audio = useRef(null), reportInput = useRef(null), command = useRef(null);
   const worker = useRef(null), jobId = useRef(0), fileVersions = useRef({ vocal: 0, reference: 0, report: 0 });
   const alignmentResetByFile = useRef(false);
+  const sessionOrigins = useRef({ vocal: null, reference: null, report: [] });
+  const sessionCapture = useRef(null);
   const urls = useRef({ vocal: '', reference: '' }), pcmCache = useRef(new Map());
   const reportRef = useRef(report), activeRef = useRef(active);
   reportRef.current = report; activeRef.current = active;
@@ -90,11 +95,18 @@ export default function RecordingReview({ active }) {
   useEffect(() => {
     const onTab = event => { if (event.detail?.tab !== 'karaoke') audio.current?.pause(); };
     const onOctave = event => setOctaveBase(Number(event.detail?.octaveBase) || 0);
+    const onSession = event => { if (event.detail) openSession(event.detail); };
+    const onSessionDeleted = event => clearDeletedSession(event.detail?.sessionId);
     window.addEventListener('musicmaster:tab-change', onTab);
     window.addEventListener('musicmaster:octave-change', onOctave);
+    window.addEventListener('musicmaster:open-session', onSession);
+    window.addEventListener('musicmaster:session-deleted', onSessionDeleted);
     return () => {
       window.removeEventListener('musicmaster:tab-change', onTab);
       window.removeEventListener('musicmaster:octave-change', onOctave);
+      window.removeEventListener('musicmaster:open-session', onSession);
+      window.removeEventListener('musicmaster:session-deleted', onSessionDeleted);
+      ++fileVersions.current.report; ++fileVersions.current.vocal; ++fileVersions.current.reference;
       ++jobId.current; worker.current?.terminate(); audio.current?.pause();
       for (const url of Object.values(urls.current)) if (url) URL.revokeObjectURL(url);
     };
@@ -109,8 +121,82 @@ export default function RecordingReview({ active }) {
     }
   }, [report, sources, kinds, offset, transpose, alignmentConfirmed, bindingsMatch]);
 
+  function clearDeletedSession(sessionId) {
+    if (typeof sessionId !== 'string') return;
+    const roles = ['vocal', 'reference'].filter(role => sessionOrigins.current[role] === sessionId);
+    const clearReport = sessionOrigins.current.report.includes(sessionId);
+    if (!roles.length && !clearReport) return;
+    ++fileVersions.current.report; pause(); setSelection(null); setTime(0);
+    if (roles.length) { stopWorker(); setBusy(false); setProgress(0); setPhase('recording.readyToAnalyze'); }
+    for (const role of roles) {
+      ++fileVersions.current[role]; sessionOrigins.current[role] = null; pcmCache.current.delete(role);
+      if (urls.current[role]) URL.revokeObjectURL(urls.current[role]);
+      urls.current[role] = '';
+    }
+    setSources(current => Object.fromEntries(Object.entries(current).map(([role, source]) => [role, roles.includes(role) ? null : source])));
+    setKinds(current => Object.fromEntries(Object.entries(current).map(([role, kind]) => [role, roles.includes(role) ? 'unknown' : kind])));
+    if (clearReport) { setReport(null); sessionOrigins.current.report = []; }
+    if (sessionCapture.current?.sessionId === sessionId) sessionCapture.current = null;
+    if (roles.includes('vocal')) setTrack('vocal');
+    alignmentResetByFile.current = false; setAlignmentConfirmed(false); setNotice(null);
+  }
+
+  function openSession(detail) {
+    ++fileVersions.current.report;
+    stopWorker(); pause(); setBusy(false); setProgress(0); setSelection(null); setTime(0); setTrack('vocal'); setLoop(false);
+    alignmentResetByFile.current = false;
+    pcmCache.current.clear();
+    for (const role of ['vocal', 'reference']) {
+      ++fileVersions.current[role];
+      if (urls.current[role]) URL.revokeObjectURL(urls.current[role]);
+      urls.current[role] = '';
+    }
+    let incomingReport = detail.report || null, reportError = null;
+    const capture = detail.capture || incomingReport?.metadata?.capture || null;
+    if (incomingReport) {
+      const validation = validateRecordingReport(incomingReport);
+      if (!validation.valid) { incomingReport = null; reportError = validation.errors.join('; '); }
+      else incomingReport = applyRecordingCapture(structuredClone(incomingReport), capture);
+    }
+    setReport(incomingReport);
+    const sessionId = typeof detail.sessionId === 'string' ? detail.sessionId : null;
+    sessionCapture.current = sessionId && capture ? { sessionId, capture } : null;
+    sessionOrigins.current = { vocal: null, reference: null, report: incomingReport && sessionId ? [sessionId] : [] };
+    const capturedOffset = Number.isFinite(detail.offsetSec) && Math.abs(detail.offsetSec) <= 1200 ? detail.offsetSec : null;
+    setOffset(String(incomingReport?.comparison?.offsetSec ?? capturedOffset ?? 0));
+    setTranspose(String(incomingReport?.comparison?.transposeSemitones ?? 0));
+    setAlignmentConfirmed(incomingReport?.comparison?.alignmentTrusted === true);
+    setAutoOffset(!incomingReport && capturedOffset === null);
+    setKinds({
+      vocal: REPORT_SOURCE_TYPES.includes(detail.sourceKind) ? detail.sourceKind : incomingReport?.metadata?.sourceKind || 'unknown',
+      reference: REPORT_SOURCE_TYPES.includes(detail.referenceKind) ? detail.referenceKind : incomingReport?.comparison?.referenceMetadata?.sourceKind || 'unknown',
+    });
+    setPhase(incomingReport ? 'recording.imported' : detail.status === 'error' ? 'recording.sessionAnalysisError' : 'recording.sessionAnalysisPending');
+    setNotice(reportError ? { key: 'recording.reportError', detail: reportError } : null);
+    const next = { vocal: null, reference: null };
+    for (const [role, file] of [['vocal', detail.vocalFile], ['reference', detail.referenceFile]]) {
+      if (!(file instanceof Blob) || typeof file.name !== 'string') continue;
+      if (file.size > 128 * 1024 * 1024) { setNotice({ key: 'recording.audioTooLarge' }); continue; }
+      next[role] = { file, hash: '', url: '' };
+      sessionOrigins.current[role] = sessionId;
+      const version = fileVersions.current[role];
+      reviewFileHash(file).then(hash => {
+        if (fileVersions.current[role] !== version) return;
+        const url = URL.createObjectURL(file); urls.current[role] = url;
+        setSources(current => ({ ...current, [role]: { file, hash, url } }));
+      }).catch(error => {
+        if (fileVersions.current[role] !== version) return;
+        setSources(current => ({ ...current, [role]: { file, hash: '', url: '', error: true } }));
+        setNotice({ key: 'recording.fileError', detail: error.message });
+      });
+    }
+    setSources(next);
+  }
+
   async function chooseSource(role, file) {
     if (file.size > 128 * 1024 * 1024) { setNotice({ key: 'recording.audioTooLarge' }); return; }
+    sessionOrigins.current[role] = null;
+    if (role === 'vocal') sessionCapture.current = null;
     ++fileVersions.current.report;
     stopWorker(); setBusy(false); pause(); setSelection(null); setTime(0); setNotice(null);
     const version = ++fileVersions.current[role];
@@ -129,7 +215,7 @@ export default function RecordingReview({ active }) {
         const matches = reviewSourceMatches({ hash }, metadata);
         if (!matches) { alignmentResetByFile.current = true; setAlignmentConfirmed(false); }
         else {
-          if (SOURCE_TYPES.includes(metadata.sourceKind)) setKinds(current => ({ ...current, [role]: metadata.sourceKind }));
+          if (REPORT_SOURCE_TYPES.includes(metadata.sourceKind)) setKinds(current => ({ ...current, [role]: metadata.sourceKind }));
         }
       } else {
         setAlignmentConfirmed(false);
@@ -142,6 +228,8 @@ export default function RecordingReview({ active }) {
     }
   }
   function removeSource(role) {
+    sessionOrigins.current[role] = null;
+    if (role === 'vocal') sessionCapture.current = null;
     ++fileVersions.current[role]; ++fileVersions.current.report; stopWorker(); setBusy(false); pause();
     if (urls.current[role]) URL.revokeObjectURL(urls.current[role]);
     urls.current[role] = ''; pcmCache.current.delete(role);
@@ -182,6 +270,9 @@ export default function RecordingReview({ active }) {
     }
     stopWorker(); pause(); const token = jobId.current;
     const inputs = { ...sources }, sourceKinds = { ...kinds };
+    const inputSessionId = sessionOrigins.current.vocal;
+    const referenceSessionId = sessionOrigins.current.reference;
+    const inputCapture = inputSessionId && sessionCapture.current?.sessionId === inputSessionId ? sessionCapture.current.capture : null;
     setBusy(true); setProgress(0); setNotice(null); setPhase('recording.decodingVocal');
     try {
       const pcm = await decoded('vocal', inputs.vocal, token);
@@ -211,6 +302,7 @@ export default function RecordingReview({ active }) {
           const result = data.report;
           const validation = validateRecordingReport(result);
           if (!validation.valid) { fail(validation.errors.join('; ')); return; }
+          applyRecordingCapture(result, inputCapture);
           result.metadata.audioIdentity = { sha256: inputs.vocal.hash, byteLength: inputs.vocal.file.size, name: inputs.vocal.file.name };
           if (inputs.reference && result.comparison?.referenceMetadata)
             result.comparison.referenceMetadata.audioIdentity = { sha256: inputs.reference.hash, byteLength: inputs.reference.file.size, name: inputs.reference.file.name };
@@ -219,8 +311,14 @@ export default function RecordingReview({ active }) {
             setOffset(String(result.comparison.offsetSec));
             setAlignmentConfirmed(result.comparison.alignmentTrusted === true);
           }
+          sessionOrigins.current.report = [...new Set([inputSessionId, referenceSessionId].filter(Boolean))];
           setReport(result); setBusy(false); setProgress(1); setPhase('recording.complete'); alignmentResetByFile.current = false;
           setSelection(null); setTime(0);
+          if (inputSessionId && (!inputs.reference || referenceSessionId === inputSessionId)) {
+            window.dispatchEvent(new CustomEvent('musicmaster:session-report', {
+              detail: { sessionId: inputSessionId, report: result, sourceHash: inputs.vocal.hash },
+            }));
+          }
         }
       };
       const copy = pcm.slice(), referenceCopy = referencePcm?.slice();
@@ -251,13 +349,15 @@ export default function RecordingReview({ active }) {
       if (token !== fileVersions.current.report) return;
       const validation = validateRecordingReport(imported);
       if (!validation.valid) throw new Error(validation.errors.join('; '));
+      applyRecordingCapture(imported, imported.metadata.capture);
+      sessionOrigins.current.report = [];
       setReport(imported); setSelection(null); setTime(0); setPhase('recording.imported'); alignmentResetByFile.current = false;
       setOffset(String(imported.comparison?.offsetSec ?? imported.parameters?.offsetSec ?? 0));
       setTranspose(String(imported.comparison?.transposeSemitones ?? imported.parameters?.transposeSemitones ?? 0));
       setAlignmentConfirmed(imported.comparison?.alignmentTrusted === true);
       setAutoOffset(false);
-      setKinds(current => ({ ...current, vocal: SOURCE_TYPES.includes(imported.metadata.sourceKind) ? imported.metadata.sourceKind : 'unknown',
-        reference: SOURCE_TYPES.includes(imported.comparison?.referenceMetadata?.sourceKind) ? imported.comparison.referenceMetadata.sourceKind : 'unknown' }));
+      setKinds(current => ({ ...current, vocal: REPORT_SOURCE_TYPES.includes(imported.metadata.sourceKind) ? imported.metadata.sourceKind : 'unknown',
+        reference: REPORT_SOURCE_TYPES.includes(imported.comparison?.referenceMetadata?.sourceKind) ? imported.comparison.referenceMetadata.sourceKind : 'unknown' }));
     } catch (error) {
       if (token === fileVersions.current.report) setNotice({ key: 'recording.reportError', detail: error.message });
     }
@@ -334,6 +434,7 @@ export default function RecordingReview({ active }) {
         <SourceInput role="vocal" source={sources.vocal} kind={kinds.vocal} onFile={file => chooseSource('vocal', file)} onKind={value => changeKind('vocal', value)} onRemove={() => removeSource('vocal')} />
         <SourceInput role="reference" source={sources.reference} kind={kinds.reference} onFile={file => chooseSource('reference', file)} onKind={value => changeKind('reference', value)} onRemove={() => removeSource('reference')} />
       </div>
+      {kinds.vocal === 'mixed' && <p className="review-session-hint">{t('recording.sessionMixedHint')}</p>}
       <div className="review-analysis-controls">
         <label className="review-check review-auto-offset"><input id="reviewAutoOffset" type="checkbox" checked={autoOffset} disabled={!sources.reference} onChange={event => changeSetting(setAutoOffset, event.target.checked)} /><span>{t('recording.autoOffset')}</span></label>
         <label>{t('recording.offset')}<span className="review-number-field"><input id="reviewOffset" type="number" min="-1200" max="1200" step="0.01" value={offset} onChange={event => changeOffset(event.target.value)} /><span>s</span></span></label>

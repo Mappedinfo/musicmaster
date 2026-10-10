@@ -2,11 +2,11 @@ import { t } from '../../js/i18n.js';
 
 // 固定报告代码到界面文案的映射：未知导入值不会作为翻译键泄漏到界面。
 const labels = {
-  source: { unknown: 'recording.source.unknown', vocal: 'recording.source.vocal', separated: 'recording.source.separated' },
+  source: { unknown: 'recording.source.unknown', vocal: 'recording.source.vocal', separated: 'recording.source.separated', mixed: 'recording.source.mixed' },
   quality: { ok: 'recording.quality.ok', limited: 'recording.quality.limited', insufficient: 'recording.quality.insufficient' },
   reason: {
     tooShort: 'recording.reason.tooShort', noVoice: 'recording.reason.noVoice', lowVoicedCoverage: 'recording.reason.lowVoicedCoverage',
-    lowPitchClarity: 'recording.reason.lowPitchClarity', mixedSource: 'recording.reason.mixedSource', unknownSource: 'recording.reason.unknownSource',
+    lowPitchClarity: 'recording.reason.lowPitchClarity', mixedSource: 'recording.reason.mixedSource', unknownSource: 'recording.reason.unknownSource', captureIncomplete: 'recording.reason.captureIncomplete',
     separationArtifacts: 'recording.reason.separationArtifacts', clipping: 'recording.reason.clipping', lowRecordingLevel: 'recording.reason.lowRecordingLevel',
   },
   issue: {
@@ -29,7 +29,7 @@ const labels = {
   },
   hypothesisReason: {
     noStableRegions: 'recording.hypothesisReason.noStableRegions', insufficientRepeatedEvidence: 'recording.hypothesisReason.insufficientRepeatedEvidence',
-    mixedSource: 'recording.hypothesisReason.mixedSource', unknownSource: 'recording.hypothesisReason.unknownSource', needDryRecording: 'recording.hypothesisReason.needDryRecording',
+    mixedSource: 'recording.hypothesisReason.mixedSource', unknownSource: 'recording.hypothesisReason.unknownSource', needDryRecording: 'recording.hypothesisReason.needDryRecording', captureIncomplete: 'recording.hypothesisReason.captureIncomplete',
     breathSupportInsufficientEvidence: 'recording.hypothesisReason.breathSupportInsufficientEvidence',
     pressedPhonationInsufficientEvidence: 'recording.hypothesisReason.pressedPhonationInsufficientEvidence',
     breathyClosureInsufficientEvidence: 'recording.hypothesisReason.breathyClosureInsufficientEvidence',
@@ -40,6 +40,7 @@ const labels = {
     referenceInsufficient: 'recording.comparisonReason.referenceInsufficient', performanceInsufficient: 'recording.comparisonReason.performanceInsufficient',
     sourceUnverified: 'recording.comparisonReason.sourceUnverified', referenceInconsistent: 'recording.comparisonReason.referenceInconsistent',
     insufficientOverlap: 'recording.comparisonReason.insufficientOverlap', insufficientCoverage: 'recording.comparisonReason.insufficientCoverage',
+    captureIncomplete: 'recording.comparisonReason.captureIncomplete',
   },
   alignmentReason: {
     alignmentInsufficientVoicing: 'recording.alignmentReason.alignmentInsufficientVoicing',

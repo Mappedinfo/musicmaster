@@ -1,10 +1,11 @@
 // ============================================================
 // K 歌跟唱：本地音频 -> 参考旋律线 -> 实时对比 -> 逐句指导
-// 全部在浏览器内存里完成，歌曲不上传、不落盘
+// 音频不上传；完整演唱由 controller 授权保存到本机 IndexedDB。
 // ============================================================
 import { freqToMidi, yinDetect, rmsLevel } from './dsp.js';
 import { extractVocal } from './vocal-extract.js';
 import { extractMelody } from './melody.js';
+import { KaraokeRecorder, KaraokeRecordingError } from './karaoke-recording.js';
 
 export const TARGET_SR = 16000;
 const LIVE_FRAME = 2048;
@@ -397,6 +398,14 @@ export class KaraokePlayer {
     this.onEnded = opts.onEnded || (() => {});
     this.onBlocked = opts.onBlocked || (() => {});
     this.onFrame = opts.onFrame || (() => {});
+    this.onTakeLimit = opts.onTakeLimit || (() => {});
+    this.onTakeError = opts.onTakeError || (() => {});
+    this._recorder = new KaraokeRecorder({ getSongTime: () => this.currentTime,
+      onLimit: event => this.onTakeLimit(event), onError: error => this.onTakeError(error) });
+    this._micSource = null;
+    this._micStopping = null;
+    this._micStarting = null;
+    this._micGeneration = 0;
     this.audio = null;
     this.url = null;
     this.ready = false;
@@ -430,13 +439,19 @@ export class KaraokePlayer {
       this.duration = A.duration || 0;
       this.ready = true;
     });
-    A.addEventListener('playing', () => { this.playing = true; });
-    A.addEventListener('pause', () => { this.playing = false; });
+    A.addEventListener('playing', () => {
+      this.playing = true;
+      this._recorder.resume().catch(error => this.onTakeError(error));
+    });
+    A.addEventListener('pause', () => { this.playing = false; void this._recorder.pause(); });
     A.addEventListener('ended', () => {
       this.playing = false;
+      this._stopLoops();
+      void this._recorder.pause();
       this.onEnded();
     });
     A.addEventListener('error', () => {
+      void this.pause();
       this.ready = false;
       this.onBlocked('音频加载失败，请换一个文件');
     });
@@ -446,6 +461,7 @@ export class KaraokePlayer {
   async loadBlob(blob) { return this.load(blob); }
 
   async load(file) {
+    this._requireFinishedTake();
     if (!this.audio) return 0;
     this.release();
     this.url = URL.createObjectURL(file);
@@ -470,6 +486,9 @@ export class KaraokePlayer {
     try {
       await this.audio.play();
     } catch (err) {
+      this.playing = false;
+      this._stopLoops();
+      await this._recorder.pause();
       this.onBlocked('点击画面后重试：浏览器需要一次用户操作才能播放音频');
       return false;
     }
@@ -479,15 +498,19 @@ export class KaraokePlayer {
 
   pause() {
     if (this.audio) this.audio.pause();
+    this.playing = false;
     this._stopLoops();
+    return this._recorder.pause();
   }
 
   restart() {
+    this._requireFinishedTake();
     if (!this.audio) return;
     try { this.audio.currentTime = 0; } catch (err) { /* ignore */ }
   }
 
   async seek(t) {
+    this._requireFinishedTake();
     if (!this.audio || !this.duration) return;
     try { this.audio.currentTime = Math.max(0, Math.min(this.duration, t)); } catch (err) { /* ignore */ }
   }
@@ -498,12 +521,47 @@ export class KaraokePlayer {
   }
 
   get currentTime() { return this.audio ? (this.audio.currentTime || 0) : 0; }
+  get takeActive() { return this._recorder.takeActive; }
+  get takeState() { return this._recorder.takeState; }
+  get takeId() { return this._recorder.takeId; }
+
+  _requireFinishedTake() {
+    if (this.takeActive) throw new KaraokeRecordingError('takeActive', '请先完成或放弃当前录音，再切换歌曲位置。');
+  }
+
+  /** 准备 take；只有实际 playing 事件才启动连续采集，预加载不进入录音。 */
+  async beginTake(options = {}) {
+    try {
+      if (this._micStopping) await this._micStopping;
+      if (!this.micOn || !this.micCtx || !this._micSource) throw new KaraokeRecordingError('mediaUnavailable', '请先启用麦克风，再开始本次录音。');
+      const context = this.micCtx;
+      await this._recorder.attach(context, this._micSource);
+      if (!this.micOn || this.micCtx !== context) {
+        await this._recorder.detach();
+        throw new KaraokeRecordingError('mediaUnavailable', '麦克风已关闭；尚未开始本次录音。');
+      }
+      const take = this._recorder.begin(options);
+      if (this.playing) await this._recorder.resume();
+      return take;
+    } catch (error) { this.onTakeError(error); throw error; }
+  }
+  finishTake(reason = 'finished') { return this._recorder.finish(reason); }
+  discardTake() { return this._recorder.discard(); }
 
   /** 开启麦克风（可单独开关，K 歌播放前必须打开）。 */
   async startMic(echoCancel = false) {
+    if (this._micStopping) await this._micStopping;
+    if (this._micStarting) await this._micStarting;
     if (this.micOn) return;
-    const AC = window.AudioContext || window.webkitAudioContext;
-    this.micStream = await navigator.mediaDevices.getUserMedia({
+    const starting = this._openMicrophone(echoCancel, ++this._micGeneration);
+    this._micStarting = starting;
+    try { await starting; } finally { if (this._micStarting === starting) this._micStarting = null; }
+  }
+
+  async _openMicrophone(echoCancel, generation) {
+    const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
+    if (!AC || !globalThis.navigator?.mediaDevices?.getUserMedia) throw new KaraokeRecordingError('mediaUnavailable', '浏览器无法使用麦克风；请使用 HTTPS 并检查麦克风权限。');
+    const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: !!echoCancel,
         noiseSuppression: !!echoCancel,
@@ -511,16 +569,33 @@ export class KaraokePlayer {
         channelCount: 1,
       },
     });
-    this.micCtx = new AC();
-    if (this.micCtx.state === 'suspended') await this.micCtx.resume();
-    const src = this.micCtx.createMediaStreamSource(this.micStream);
-    const analyser = this.micCtx.createAnalyser();
-    analyser.fftSize = LIVE_FRAME;
-    src.connect(analyser);
-    this.micAnalyser = analyser;
-    this.micBuf = new Float32Array(LIVE_FRAME);
-    this.micSince = 0;
-    this.micOn = true;
+    let context;
+    try {
+      if (generation !== this._micGeneration) throw new KaraokeRecordingError('mediaUnavailable', '麦克风请求已取消。');
+      try { context = new AC({ sampleRate: TARGET_SR }); } catch { context = new AC(); }
+      if (context.state === 'suspended') await context.resume();
+      if (generation !== this._micGeneration) throw new KaraokeRecordingError('mediaUnavailable', '麦克风请求已取消。');
+      const src = context.createMediaStreamSource(stream);
+      const analyser = context.createAnalyser();
+      analyser.fftSize = LIVE_FRAME;
+      src.connect(analyser);
+      this.micStream = stream; this.micCtx = context; this._micSource = src;
+      this.micAnalyser = analyser;
+      this.micBuf = new Float32Array(LIVE_FRAME);
+      this.micSince = 0;
+      this.micOn = true;
+      if (this.takeActive) {
+        await this._recorder.attach(context, src);
+        if (this.playing) await this._recorder.resume();
+      }
+    } catch (error) {
+      stream.getTracks().forEach(track => track.stop());
+      await this._recorder.detach();
+      if (context) await context.close().catch(() => {});
+      this.micStream = null; this.micCtx = null; this._micSource = null;
+      this.micAnalyser = null; this.micBuf = null; this.micOn = false;
+      throw error;
+    }
   }
 
   _stopLoops() {
@@ -565,16 +640,18 @@ export class KaraokePlayer {
 
   /** 暂停采集时保留已导入歌曲，重新启用麦克风后可以继续练习。 */
   stopMicrophone() {
-    if (this.micStream) {
-      this.micStream.getTracks().forEach((tr) => tr.stop());
-      this.micStream = null;
-    }
-    if (this.micCtx) {
-      this.micCtx.close().catch(() => {});
-      this.micCtx = null;
-    }
-    this.micAnalyser = null;
-    this.micOn = false;
+    this._micGeneration++;
+    if (this._micStopping) return this._micStopping;
+    void this.pause();
+    const stream = this.micStream, context = this.micCtx;
+    this.micStream = null; this.micCtx = null; this._micSource = null;
+    this.micAnalyser = null; this.micBuf = null; this.micOn = false;
+    this._micStopping = (async () => {
+      await this._recorder.detach();
+      stream?.getTracks().forEach(track => track.stop());
+      if (context) await context.close().catch(() => {});
+    })().finally(() => { this._micStopping = null; });
+    return this._micStopping;
   }
 
   stop() {
@@ -587,6 +664,7 @@ export class KaraokePlayer {
 
   /** 释放 blob URL 与音频源（不保留任何歌曲数据）。 */
   release() {
+    void this._recorder.pause();
     if (this.url && typeof URL.revokeObjectURL === 'function') {
       URL.revokeObjectURL(this.url);
       this.url = null;

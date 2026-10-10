@@ -1,7 +1,8 @@
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Icon, PanelHeading, Text } from './ui.jsx';
 import { t } from '../../js/i18n.js';
 import RecordingReview from './RecordingReview.jsx';
+import KaraokeSessions from './KaraokeSessions.jsx';
 import { useReviewLanguage } from './recordingReviewUtils.js';
 
 function FileControl({ id, accept, titleKey, title, buttonKey, button, children }) {
@@ -91,6 +92,14 @@ export function KaraokePanel() {
     setMode(next);
     window.dispatchEvent(new CustomEvent('musicmaster:karaoke-mode', { detail: { mode: next } }));
   }
+  useEffect(() => {
+    const showReview = () => {
+      setMode('review');
+      window.dispatchEvent(new CustomEvent('musicmaster:karaoke-mode', { detail: { mode: 'review' } }));
+    };
+    window.addEventListener('musicmaster:show-review', showReview);
+    return () => window.removeEventListener('musicmaster:show-review', showReview);
+  }, []);
   return <section id="tab-karaoke" className="tab-panel panel-stack">
     {mode === 'live' && <PanelHeading title="k.title" subtitle="k.subtitle" />}
     <div className="karaoke-mode-bar">
@@ -102,6 +111,7 @@ export function KaraokePanel() {
     </div>
     <div id="karaokeLive" className="karaoke-live" hidden={mode !== 'live'}><LiveKaraokePanel /></div>
     <RecordingReview active={mode === 'review'} />
+    <KaraokeSessions />
   </section>;
 }
 
@@ -161,8 +171,12 @@ const LiveKaraokePanel = memo(function LiveKaraokePanel() {
             <input type="checkbox" id="karaokeEcho" />
             <span data-i18n="k.echoShort">外放模式</span>
           </label>
+          <label className="k-check"><input type="checkbox" id="karaokeCoachEnabled" defaultChecked /><span data-i18n="coach.enabled">文字教练</span></label>
+          <label className="k-check"><input type="checkbox" id="karaokeAutoRecord" defaultChecked /><span data-i18n="session.autoRecord">录音与自动复盘</span></label>
+          <button type="button" className="btn btn-ghost" id="karaokeFinishBtn" disabled data-i18n="session.finish">结束并复盘</button>
         </div>
         <p className="karaoke-hint" id="karaokeHint" data-i18n="k.hintIdle">先启用麦克风，再开始跟唱。戴耳机练习效果最好。</p>
+        <p className="card-caption" data-i18n="session.recordingPrivacy">开启自动录音后，唱完会保存到此浏览器；可下载或删除。</p>
       </div>
 
       <div className="karaoke-grid karaoke-workspace">
@@ -182,6 +196,10 @@ const LiveKaraokePanel = memo(function LiveKaraokePanel() {
         </div>
 
         <div className="card k-status-card">
+          <div className="k-coach" id="karaokeCoach" data-code="idle" data-tone="neutral" role="status" aria-live="polite" aria-atomic="true">
+            <span className="k-coach-label" data-i18n="coach.title">文字教练</span>
+            <p id="karaokeCoachText" data-i18n="coach.idle">开始跟唱后，这里会提示当前最值得调整的一点。</p>
+          </div>
           <h3 data-i18n="k.statusTitle">实时状态</h3>
           <div className="k-status">
             <div><span data-i18n="k.refNote">参考音</span><b id="karaokeRef">--</b></div>

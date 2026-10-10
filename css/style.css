@@ -391,6 +391,40 @@ meter::-moz-meter-bar { background: var(--teal); }
 .karaoke-modes button { min-height: 36px; padding: 6px 14px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--muted); font-size: 12px; }
 .karaoke-modes button.active { color: var(--teal); border-color: #365544; background: #22362c; }
 .karaoke-live > .card, .karaoke-live > .karaoke-grid, .karaoke-live > .guide-details { margin-bottom: 16px; }
+.k-coach { padding: 12px; margin: -2px -2px 18px; border: 1px solid #3b5343; border-radius: 8px; background: #1d2d23; min-height: 102px; }
+.k-coach-label { color: var(--teal); font-size: 10px; letter-spacing: .08em; }
+.k-coach p { margin-top: 7px; font-size: 13px; line-height: 1.65; color: var(--text); }
+.k-coach[data-tone="notice"] { border-color: #766044; background: #332b20; }
+.k-coach[data-tone="notice"] .k-coach-label { color: var(--amber); }
+.k-coach[data-tone="positive"] { border-color: #548669; }
+.k-check { cursor: pointer; min-height: 36px; }
+.k-session-card { margin-top: 16px; }
+.k-session-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 10px 20px; flex-wrap: wrap; }
+.k-session-heading h3 { font-size: 14px; }
+.k-session-heading .muted { font-size: 11px; line-height: 1.6; }
+.k-session-status { color: var(--teal); font-size: 12px; margin-top: 12px; line-height: 1.6; }
+.k-session-error, .review-session-hint { color: var(--amber); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; margin-top: 8px; }
+.k-session-empty { color: var(--muted); font-size: 11px; margin-top: 8px; }
+.k-session-list { list-style: none; padding: 0; margin: 12px 0 0; max-height: 360px; overflow-y: auto; }
+.k-session-item { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+.k-session-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.k-session-meta strong { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.k-session-meta span, .k-session-meta small { font-size: 10px; color: var(--muted); }
+.k-session-current .k-session-meta small { color: var(--teal); }
+.k-session-actions { display: flex; gap: 4px 7px; align-items: center; flex-wrap: wrap; flex-shrink: 0; }
+.k-session-actions .btn { min-height: 34px; font-size: 11px; padding: 6px 10px; }
+.k-session-delete-confirm { max-width: 360px; }
+.k-session-delete-confirm > span { font-size: 11px; color: var(--amber); flex-basis: 100%; }
+@media (max-width: 600px) {
+  .k-coach { min-height: 85px; margin-bottom: 12px; }
+  .k-session-item { align-items: stretch; flex-direction: column; gap: 8px; }
+  .k-session-actions { justify-content: flex-start; }
+  .k-session-heading { display: block; }
+  .k-session-heading .muted { margin-top: 6px; }
+}
+@media (max-width: 760px) {
+  .karaoke-workspace .k-status-card { grid-row: 1; }
+}
 .recording-review > .card, .review-report > .card, .review-report > .guide-details { margin-bottom: 16px; }
 .review-section-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
 .review-section-heading h3 { font-size: 14px; }

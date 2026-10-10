@@ -11,6 +11,8 @@ import {
 } from './karaoke.js';
 import { t, L, initI18n, setLang, getLang, onLangChange, applyI18n, DICT } from './i18n.js';
 import { buildReferenceFromPair } from './karaoke.js';
+import { LiveSingingCoach } from './live-coach.js';
+import { KaraokeSessionController } from './karaoke-sessions.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -175,7 +177,7 @@ micBtn.addEventListener('click', async () => {
     engine.stop();
     console.error(err);
     let msg = t('micErr.generic');
-    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+    if (!window.isSecureContext) {
       msg = t('micErr.https');
     } else if (err && err.name === 'NotAllowedError') {
       msg = t('micErr.denied');
@@ -196,6 +198,9 @@ function stopMic() {
     setKaraokePlayLabel(false);
   }
   if (state.karaoke.player) state.karaoke.player.stopMicrophone();
+  state.karaoke.sessions?.paused();
+  state.karaoke.coach?.reset(); state.karaoke.coachFeedback = null;
+  renderLiveCoach('paused');
   state.karaoke.live = null;
   state.karaoke.lastEval = null;
   engine.stop();
@@ -785,12 +790,17 @@ async function prepareKaraokeMic() {
 function initKaraoke() {
   KARAOKE.active = true;
   const k = KARAOKE;
+  k.coach = new LiveSingingCoach();
 
   // 手机上默认勾选"外放模式"，减少伴奏被麦克风再收进去
   const echoBox = $('#karaokeEcho');
   if (echoBox && isMobileLike()) echoBox.checked = true;
   echoBox.addEventListener('change', async () => {
     const enabled = echoBox.checked;
+    const wasPlaying = k.player?.playing;
+    if (k.sessions?.active) {
+      k.player.pause(); await k.sessions.finish({ reason: 'environmentChanged' });
+    }
     const tracks = [engine.stream, k.player?.micStream].filter(Boolean).flatMap(stream => stream.getAudioTracks());
     echoBox.disabled = true;
     try {
@@ -801,23 +811,56 @@ function initKaraoke() {
       toast(t('k.echoFailed'));
     } finally {
       echoBox.disabled = false;
+      if (wasPlaying) {
+        if ($('#karaokeAutoRecord').checked) { try { await k.sessions.begin(); } catch { /* 继续跟唱 */ } }
+        if (await k.player.play()) k.sessions.resumed();
+      }
     }
   });
 
   const player = new KaraokePlayer({
     onTime: (t, dur) => { k.time = t; k.duration = dur; },
     onEnded: () => { setKaraokePlayLabel(false); finishKaraoke(); },
+    onTakeLimit: () => { player.pause(); setKaraokePlayLabel(false); finishKaraoke('durationLimit'); },
+    onTakeError: () => toast(t('session.captureFailed'), 5200),
     onBlocked: (msg) => toast(msg, 5200),
     onFrame: (ev) => {
       k.live = ev;
       if (k.scorer) {
         const res = k.scorer.feed(ev.t, ev.midi);
-        if (res) k.lastEval = res;
+        k.lastEval = res;
+        if ($('#karaokeCoachEnabled').checked) {
+          k.coachFeedback = k.coach.feed(ev, res);
+          renderLiveCoach();
+        }
       }
       updateKaraokeStatus();
     },
   });
   k.player = player;
+  k.sessions = new KaraokeSessionController({ player,
+    getContext: () => ({ songName: k.songName, sourceKind: $('#karaokeEcho').checked ? 'mixed' : 'vocal',
+      referenceBlob: k.pairUsed ? k.vocalBlob : k.songFile,
+      referenceName: k.pairUsed ? 'reference-vocal.wav' : k.songName,
+      referenceKind: k.pairUsed ? 'separated' : 'mixed' }),
+    mayAutoOpen: () => k.mode === 'live' && $('#tab-karaoke').classList.contains('active') && !player.playing,
+    onState: ({ takeActive }) => { $('#karaokeFinishBtn').disabled = !takeActive; },
+  });
+  $('#karaokeCoachEnabled').addEventListener('change', () => {
+    k.coach.reset(); k.coachFeedback = null; renderLiveCoach();
+  });
+  $('#karaokeAutoRecord').addEventListener('change', async () => {
+    if (!$('#karaokeAutoRecord').checked) await k.sessions.finish({ reason: 'recordingDisabled' });
+    else if (player.playing) { try { await k.sessions.begin(); } catch { /* UI 已显示录音失败，可继续跟唱。 */ } }
+  });
+  $('#karaokeFinishBtn').addEventListener('click', () => {
+    player.pause(); setKaraokePlayLabel(false); finishKaraoke();
+  });
+  window.addEventListener('musicmaster:tab-change', event => {
+    if (event.detail?.tab !== 'karaoke' && player.playing) {
+      player.pause(); k.sessions.paused(); k.coach.reset(); k.coachFeedback = null; setKaraokePlayLabel(false); renderLiveCoach('paused');
+    }
+  });
 
   // 录音复盘不需要采集；暂停实时通道，但保留歌曲、位置和已取得的结果。
   window.addEventListener('musicmaster:karaoke-mode', (event) => {
@@ -825,6 +868,9 @@ function initKaraoke() {
     if (k.mode === 'review') {
       player.pause();
       player.stopMicrophone();
+      k.sessions.paused();
+      k.coach.reset(); k.coachFeedback = null;
+      renderLiveCoach('paused');
       k.live = null;
       k.lastEval = null;
       setKaraokePlayLabel(false);
@@ -876,15 +922,26 @@ function initKaraoke() {
     if (!state.micOn) { toast(t('k.toastNeedMic')); return; }
     if (player.playing) {
       player.pause();
+      k.sessions.paused(); k.coach.reset(); k.coachFeedback = null; renderLiveCoach('paused');
       setKaraokePlayLabel(false);
       return;
     }
     if (!await prepareKaraokeMic()) return;
+    // 暂停后继续同一次演唱；新一次跟唱才重置评分、位置和录音。
+    if (k.scorer && k.takeStarted && player.currentTime > 0 && player.currentTime < player.duration) {
+      if ($('#karaokeAutoRecord').checked && !k.sessions.active) { try { await k.sessions.begin(); } catch { /* 继续跟唱 */ } }
+      if (await player.play()) { k.sessions.resumed(); setKaraokePlayLabel(true); renderLiveCoach(); }
+      return;
+    }
+    await k.sessions.finish({ reason: 'newTake' });
     $('#karaokeReport').hidden = true;
     k.scorer = new KaraokeScorer({ ref: k.ref, lyrics: k.lyrics });
+    k.coach.reset(); k.coachFeedback = null; k.lastEval = null;
     player.restart();
+    if ($('#karaokeAutoRecord').checked) { try { await k.sessions.begin(); } catch { /* 提示后仍允许跟唱 */ } }
     const okPlay = await player.play();
     if (okPlay) {
+      k.takeStarted = true; k.sessions.resumed(); renderLiveCoach();
       setKaraokePlayLabel(true);
       $('#karaokeHint').classList.add('live');
       liveText('#karaokeHint', 'k.hintLive');
@@ -895,12 +952,15 @@ function initKaraoke() {
     if (!k.fileReady) { toast(t('k.toastNeedSong')); return; }
     if (!state.micOn) { toast(t('k.toastNeedMic')); return; }
     if (!await prepareKaraokeMic()) return;
+    player.pause(); await k.sessions.finish({ reason: 'restart' });
     k.scorer = new KaraokeScorer({ ref: k.ref, lyrics: k.lyrics });
+    k.coach.reset(); k.coachFeedback = null;
     k.lastEval = null;
     $('#karaokeReport').hidden = true;
     player.restart();
+    if ($('#karaokeAutoRecord').checked) { try { await k.sessions.begin(); } catch { /* 继续跟唱 */ } }
     const okPlay = await player.play();
-    if (okPlay) setKaraokePlayLabel(true);
+    if (okPlay) { k.takeStarted = true; k.sessions.resumed(); setKaraokePlayLabel(true); renderLiveCoach(); }
   });
 }
 
@@ -911,6 +971,8 @@ function setKaraokePlayLabel(playing) {
 
 async function loadKaraokeFile(file) {
   const k = KARAOKE;
+  k.player.pause(); await k.sessions.finish({ reason: 'songChanged' });
+  k.takeStarted = false; k.scorer = null; k.lastEval = null; k.coach.reset(); k.coachFeedback = null; renderLiveCoach();
   k.songFile = file;
   const prog = $('#karaokeProgressFill');
   const info = $('#karaokeFileInfo');
@@ -985,8 +1047,11 @@ async function loadKaraokeFile(file) {
   }
 }
 
-function finishKaraoke() {
+function finishKaraoke(reason = 'finished') {
   const k = KARAOKE;
+  k.takeStarted = false;
+  renderLiveCoach('finished');
+  k.sessions.finish({ autoOpen: reason === 'finished' || reason === 'durationLimit', reason });
   const report = k.scorer ? k.scorer.buildReport() : null;
   $('#karaokeHint').classList.remove('live');
   liveText('#karaokeHint', 'k.hintDone');
@@ -1046,12 +1111,16 @@ function renderKaraokeReport(r) {
       const seekTime = Number(btn.dataset.seek);
       const k = KARAOKE;
       if (!await prepareKaraokeMic()) return;
+      k.player.pause(); await k.sessions.finish({ reason: 'segmentRetry' });
       await k.player.seek(seekTime);
       k.scorer = new KaraokeScorer({ ref: k.ref, lyrics: k.lyrics });
+      k.coach.reset(); k.coachFeedback = null;
       k.lastEval = null;
       el.hidden = true;
+      if ($('#karaokeAutoRecord').checked) { try { await k.sessions.begin(); } catch { /* 继续跟唱 */ } }
       const ok2 = await k.player.play();
       if (ok2) {
+        k.takeStarted = true; k.sessions.resumed(); renderLiveCoach();
         setKaraokePlayLabel(true);
         $('#karaokeHint').classList.add('live');
         liveText('#karaokeHint', 'k.hintLive');
@@ -1059,6 +1128,18 @@ function renderKaraokeReport(r) {
       }
     });
   });
+}
+
+function renderLiveCoach(override) {
+  const k = KARAOKE, root = $('#karaokeCoach');
+  if (!root) return;
+  const enabled = $('#karaokeCoachEnabled')?.checked;
+  const feedback = k.coachFeedback || { code: 'idle', vars: {}, tone: 'neutral' };
+  const code = !enabled ? 'disabled' : override || feedback.code;
+  if (!override && root.dataset.code === code && performance.now() - (k.coachRenderedAt || 0) < 500) return;
+  k.coachRenderedAt = performance.now();
+  root.dataset.code = code; root.dataset.tone = override || !enabled ? 'neutral' : feedback.tone;
+  liveText('#karaokeCoachText', 'coach.' + code, feedback.vars);
 }
 
 function updateKaraokeStatus() {

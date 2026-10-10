@@ -15,6 +15,11 @@ const tabs = [
 function Navigation() {
   const [active, setActive] = useState('tuner');
   useEffect(() => {
+    const onNavigate = event => { if (tabs.some(tab => tab.id === event.detail?.tab)) setActive(event.detail.tab); };
+    window.addEventListener('musicmaster:navigate', onNavigate);
+    return () => window.removeEventListener('musicmaster:navigate', onNavigate);
+  }, []);
+  useEffect(() => {
     for (const tab of tabs) {
       const panel = document.getElementById(`tab-${tab.id}`);
       panel.classList.toggle('active', tab.id === active);

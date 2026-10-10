@@ -7,9 +7,10 @@
     "dev": "vite --port 8901 --strictPort",
     "build": "vite build",
     "preview": "vite preview --port 8901 --strictPort",
-    "test": "node test/dsp.test.mjs && node test/karaoke.test.mjs && node test/recording-analysis.test.mjs && node test/recording-alignment.test.mjs && node test/i18n_check.mjs",
+    "test": "node test/dsp.test.mjs && node test/karaoke.test.mjs && node test/live-coach.test.mjs && node test/karaoke-recording.test.mjs && node test/session-store.test.mjs && node test/karaoke-sessions.test.mjs && node test/recording-analysis.test.mjs && node test/recording-alignment.test.mjs && node test/i18n_check.mjs",
     "test:ui": "uv run --with playwright python test/ui_smoke.py",
     "test:recording-ui": "uv run --with playwright python test/recording_ui_smoke.py",
+    "test:live-ui": "uv run --with playwright python test/live_session_ui.py",
     "analyze:recording": "node tools/vocal-analysis/analyze.mjs"
   },
   "engines": {
